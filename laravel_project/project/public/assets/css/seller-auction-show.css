@@ -1,0 +1,4 @@
+.stream-mode-opt { display:inline-flex; align-items:center; gap:8px; padding:10px 16px; border-radius:10px; border:1px solid var(--border); background:var(--bg-soft); color:var(--muted); font-size:13px; font-weight:600; cursor:pointer; transition:all .15s; }
+.stream-mode-opt input { display:none; }
+.stream-mode-opt.active { border-color:var(--primary); color:var(--primary); background:rgba(21,94,239,.08); }
+.stream-mode-opt i { font-size:16px; }

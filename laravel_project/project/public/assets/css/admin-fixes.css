@@ -1,0 +1,111 @@
+/* ============================================================
+   Admin panel Vue (Inertia) override düzeltmeleri
+   theme-new.css'ten SONRA yüklenir → en yüksek öncelik.
+   ============================================================ */
+
+/* --- Destek talebi mesaj balonları ---
+   theme-new.css'te iki ayrı .msg-bubble tanımı var (admin destek + özel sohbet).
+   Sohbet bloğu (max-width/padding/border-radius) admin destek balonunu eziyordu.
+   #msg-list altında admin destek stilini geri getir. */
+#msg-list .msg-bubble {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 16px;
+    max-width: none;
+    padding: 0;
+    border-radius: 0;
+    position: static;
+}
+#msg-list .msg-bubble.admin { flex-direction: row-reverse; }
+#msg-list .msg-avatar { width: 34px; height: 34px; }
+#msg-list .msg-body { max-width: 80%; }
+#msg-list .msg-bubble.admin .msg-body { align-items: flex-end; display: flex; flex-direction: column; }
+
+/* --- Native <select> dark/light mode uyumu ---
+   Açılan seçenek listesi tarayıcı varsayılanıyla (beyaz sistem menüsü) kalıyordu.
+   var(--card) DARK modda yarı saydam (rgba) olduğundan beyaz görünüyordu.
+   Çözüm: SOLID var(--bg) + color-scheme (native popup temasını da düzeltir). */
+select {
+    color-scheme: dark;
+}
+html.light-mode select,
+body.light-mode select {
+    color-scheme: light;
+}
+select option,
+select optgroup {
+    background-color: var(--bg);
+    color: var(--text);
+}
+
+/* ============================================================
+   UI iyileştirmeleri (kullanıcı geri bildirimi)
+   ============================================================ */
+
+/* --- Auth logo: light mode'da da ortala (dark mode'da !important vardı) --- */
+.auth-logo { display: inline-block; }
+html.light-mode .logo-dark { display: none !important; }
+html.light-mode .logo-light { display: inline-block !important; }
+
+/* --- Mesajlar sayfası çok dardı → genişlet --- */
+.msg-page { max-width: 1400px; }
+
+/* --- Anasayfa ilan kartı: görsel yüklenene kadar Skeleton shimmer --- */
+.idx-card-img { position: relative; overflow: hidden; background: var(--bg-soft); }
+.idx-card-img::before {
+    content: "";
+    position: absolute; inset: 0;
+    background: linear-gradient(100deg,
+        rgba(255,255,255,0.02) 20%,
+        rgba(255,255,255,0.09) 40%,
+        rgba(255,255,255,0.02) 60%);
+    background-size: 220% 100%;
+    animation: uiShimmer 1.2s ease-in-out infinite;
+    z-index: 1;
+}
+html.light-mode .idx-card-img::before {
+    background: linear-gradient(100deg,
+        rgba(0,0,0,0.03) 20%,
+        rgba(0,0,0,0.07) 40%,
+        rgba(0,0,0,0.03) 60%);
+    background-size: 220% 100%;
+}
+.idx-card-img.img-ready::before { display: none; }
+.idx-card-img img { position: relative; z-index: 2; opacity: 0; transition: opacity .35s ease; }
+.idx-card-img img.loaded { opacity: 1; }
+@keyframes uiShimmer { 0% { background-position: 180% 0; } 100% { background-position: -180% 0; } }
+
+/* --- Hikaye: animasyonlu (Instagram/WhatsApp tarzı) progress bar --- */
+.story-progress .sp-seg { position: relative; overflow: hidden; }
+.story-progress .sp-fill { position: absolute; inset: 0; display: block; background: #fff; border-radius: 3px; }
+.story-progress .sp-fill-done { width: 100%; }
+.story-progress .sp-fill-active { width: 0; animation-name: storyFill; animation-timing-function: linear; animation-fill-mode: forwards; }
+@keyframes storyFill { from { width: 0; } to { width: 100%; } }
+
+/* --- Hikaye medyası: tam yüklenene kadar Skeleton (yarım render yok) --- */
+.story-viewer-media { position: relative; }
+.story-media-skeleton {
+    position: absolute; inset: 0; z-index: 1;
+    display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(135deg, #1a1a22 0%, #0f0f16 100%);
+}
+.story-media-spinner {
+    width: 46px; height: 46px; border-radius: 50%;
+    border: 3px solid rgba(255,255,255,0.18);
+    border-top-color: #fff;
+    animation: storySpin .8s linear infinite;
+}
+@keyframes storySpin { to { transform: rotate(360deg); } }
+
+/* --- Hikaye: basılı-tut duraklat göstergesi --- */
+.story-paused-hint {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    z-index: 6; pointer-events: none;
+    width: 64px; height: 64px; border-radius: 50%;
+    background: rgba(0,0,0,0.45); backdrop-filter: blur(4px);
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 30px;
+}
+
+/* --- SweetAlert her zaman hikaye görüntüleyicinin ÜSTÜNDE olsun (silme onayı) --- */
+.swal2-container { z-index: 100000 !important; }

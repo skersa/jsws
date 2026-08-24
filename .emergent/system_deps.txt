@@ -1,0 +1,14 @@
+cron=3.0pl1-162
+mariadb-server=1:10.11.18-0+deb12u1
+php8.2-bcmath=8.2.33-1~deb12u1
+php8.2-cli=8.2.33-1~deb12u1
+php8.2-common=8.2.33-1~deb12u1
+php8.2-curl=8.2.33-1~deb12u1
+php8.2-gd=8.2.33-1~deb12u1
+php8.2-intl=8.2.33-1~deb12u1
+php8.2-mbstring=8.2.33-1~deb12u1
+php8.2-mysql=8.2.33-1~deb12u1
+php8.2-redis=5.3.7+4.3.0-3
+php8.2-xml=8.2.33-1~deb12u1
+php8.2-zip=8.2.33-1~deb12u1
+redis-server=5:7.0.15-1~deb12u9

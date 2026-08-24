@@ -1,0 +1,9 @@
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+  <title>artirdim.com – Icon</title>
+  <rect width="64" height="64" rx="16" fill="#0F2240"/>
+  <rect x="0.75" y="0.75" width="62.5" height="62.5" rx="15.25" fill="none" stroke="#1A3A5C" stroke-width="1.5"/>
+  <circle cx="32" cy="42" r="5.5" fill="#00C8E0"/>
+  <path d="M17,42 A15,15 0 0,1 47,42" fill="none" stroke="#00C8E0" stroke-width="3.2" stroke-linecap="round" opacity="0.95"/>
+  <path d="M9,42 A23,23 0 0,1 55,42" fill="none" stroke="#00C8E0" stroke-width="2.4" stroke-linecap="round" opacity="0.45"/>
+  <path d="M2,42 A30,30 0 0,1 62,42" fill="none" stroke="#00C8E0" stroke-width="1.8" stroke-linecap="round" opacity="0.18"/>
+</svg>

@@ -1,0 +1,82 @@
+/* Satıcı Paneli — Canlı Yayın hızlı erişim kartı */
+.seller-live-card {
+    background: linear-gradient(135deg, rgba(21, 94, 239, 0.08), rgba(21, 94, 239, 0.02));
+    border: 1px solid rgba(21, 94, 239, 0.35);
+    border-radius: 14px;
+    overflow: hidden;
+    position: relative;
+}
+
+.seller-live-card::before {
+    content: "";
+    position: absolute;
+    top: -60px;
+    right: -60px;
+    width: 200px;
+    height: 200px;
+    background: radial-gradient(circle, rgba(21, 94, 239, 0.15), transparent 70%);
+    pointer-events: none;
+}
+
+.seller-live-card--on {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.14), rgba(16, 185, 129, 0.04));
+    border-color: rgba(16, 185, 129, 0.55);
+    box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.18), 0 12px 40px rgba(16, 185, 129, 0.08);
+}
+
+.seller-live-icon {
+    width: 52px;
+    height: 52px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(21, 94, 239, 0.14);
+    color: var(--primary);
+    font-size: 24px;
+    flex-shrink: 0;
+}
+
+.seller-live-card--on .seller-live-icon {
+    background: rgba(16, 185, 129, 0.16);
+    color: #10b981;
+}
+
+.seller-live-icon--pulse {
+    animation: sellerLivePulse 1.6s ease-in-out infinite;
+}
+
+@keyframes sellerLivePulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.5); }
+    50%      { box-shadow: 0 0 0 12px rgba(16, 185, 129, 0); }
+}
+
+.seller-live-list a {
+    transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.seller-live-list a:hover {
+    transform: translateY(-1px);
+    border-color: var(--primary);
+}
+
+/* Sidebar — Canlı Yayın hızlı erişim */
+.sidebar-link-broadcast {
+    position: relative;
+}
+.sidebar-link-broadcast i {
+    color: #10b981 !important;
+}
+.sidebar-live-badge {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: #10b981;
+    color: #fff;
+    border-radius: 999px;
+    padding: 2px 8px;
+    font-size: 11px;
+    font-weight: 700;
+    animation: sellerLivePulse 1.6s ease-in-out infinite;
+}

@@ -1,0 +1,194 @@
+/* ============================================================
+ * Bakiye Yükle sayfası — inline <style>'dan taşındı.
+ * #cardFields / #bankFields / #paparaFields varsayılan display'leri artık
+ * body.balance-create.pm-{method} sınıfına göre CSS'ten ayarlanır.
+ * ============================================================ */
+
+/* Ödeme yöntemi paneli görünürlüğü (varsayılan: kart) */
+.balance-create #cardFields   { display: none; }
+.balance-create #bankFields   { display: none; }
+.balance-create #paparaFields { display: none; }
+
+.balance-create.pm-credit_card  #cardFields   { display: block; }
+.balance-create.pm-bank_transfer #bankFields  { display: block; }
+.balance-create.pm-papara       #paparaFields { display: block; }
+
+
+.alert-card-danger {
+    border-color: var(--danger) !important;
+    background: rgba(239, 68, 68, 0.03) !important;
+}
+
+.amount-input-style {
+    font-size: var(--fs-md);
+    font-weight: 600;
+}
+
+.alert-box-info {
+    background: var(--bg);
+    border-color: var(--border) !important;
+    font-size: var(--fs-sm);
+}
+
+.alert-box-warning {
+    background: var(--bg);
+    border-color: var(--border) !important;
+    font-size: var(--fs-sm);
+}
+
+.info-row-bg {
+    background: var(--bg);
+    border-color: var(--border) !important;
+}
+
+.target-text-color {
+    color: var(--text);
+}
+
+.dynamic-input.form-control,
+.customs-input-group .dynamic-input {
+    background-color: var(--bg-soft) !important;
+    border: 1px solid var(--border) !important;
+    color: var(--text) !important;
+    transition: all 0.2s ease;
+}
+
+.dynamic-input.form-control:focus {
+    background-color: var(--bg-soft) !important;
+    color: var(--text) !important;
+    border-color: var(--primary) !important;
+    box-shadow: 0 0 0 3px var(--primary-soft) !important;
+    outline: none !important;
+}
+
+.dynamic-input.is-invalid-error,
+.customs-input-group .dynamic-input.is-invalid-error {
+    border-color: rgba(239, 68, 68, 0.5) !important;
+    background-color: rgba(239, 68, 68, 0.04) !important;
+}
+
+.dynamic-input.is-invalid-error:focus {
+    border-color: #ef4444 !important;
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.25) !important;
+}
+
+.pf-input-error-msg {
+    color: #f87171;
+    font-size: 0.8rem;
+    margin-top: 6px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-weight: 500;
+}
+
+.customs-input-group .input-group-text {
+    background: var(--bg-soft) !important;
+    border-color: var(--border) !important;
+    color: var(--muted) !important;
+}
+
+.customs-input-group:has(.is-invalid-error) .input-group-text {
+    border-color: rgba(239, 68, 68, 0.5) !important;
+}
+
+.btn-admin-sec {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    padding: 8px 20px;
+    font-size: var(--fs-sm);
+    font-weight: 600;
+    border-radius: var(--radius-sm);
+    transition: var(--transition);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.btn-admin-sec:hover {
+    border-color: var(--danger);
+    color: var(--danger) !important;
+    background: rgba(239, 68, 68, 0.05);
+}
+
+.btn-copy-modern {
+    background: var(--bg-soft) !important;
+    color: var(--text) !important;
+    border: 1px solid var(--border) !important;
+    padding: 6px 14px;
+    font-size: var(--fs-xs);
+    font-weight: 500;
+    transition: var(--transition);
+}
+.btn-copy-modern:hover, .btn-copy-modern:focus, .btn-copy-modern:active {
+    background: var(--bg-soft) !important;
+    border-color: var(--primary) !important;
+    color: var(--primary) !important;
+    box-shadow: none !important;
+}
+.btn-copy-modern.copied {
+    border-color: var(--success) !important;
+    color: var(--success) !important;
+    background: rgba(34, 197, 94, 0.05) !important;
+}
+
+.btn-preset {
+    background: var(--bg-soft);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 10px 20px;
+    font-size: var(--fs-sm);
+    font-weight: 600;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: var(--transition);
+}
+.btn-preset:hover, .btn-preset.active {
+    border-color: var(--primary);
+    background: var(--primary-soft);
+    color: var(--primary);
+}
+
+.payment-tile-modern {
+    display: block;
+    width: 100%;
+    padding: 16px;
+    background: var(--bg-soft);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: var(--transition);
+}
+.payment-tile-modern:hover {
+    border-color: var(--primary);
+}
+.payment-tile-modern.active {
+    border-color: var(--primary);
+    background: var(--primary-soft);
+}
+.payment-tile-modern .tile-icon {
+    width: 40px;
+    height: 40px;
+    background: var(--bg);
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    color: var(--primary);
+    transition: var(--transition);
+}
+.payment-tile-modern.active .tile-icon {
+    background: var(--primary);
+    color: #ffffff;
+}
+.payment-tile-modern .tile-title {
+    font-size: var(--fs-sm);
+    font-weight: 600;
+    color: var(--text);
+}
+.payment-tile-modern .tile-desc {
+    font-size: var(--fs-xs);
+    color: var(--muted);
+    margin-top: 2px;
+}
