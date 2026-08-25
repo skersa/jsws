@@ -364,3 +364,55 @@ Bilerek `<a>` kalanlar: Canlı Yayın (broadcast_url — GRUP 3 hâlâ Blade), G
 - **Sorun:** Mesaj ilk denemede gönderilemiyor, "bir kez yenileyince" çalışıyordu. Kök neden: SPA'da `<meta csrf-token>` (ve fallback'ler) login/gezinti sonrası bayat → POST 419.
 - **Çözüm:** `HandleInertiaRequests` artık her yanıtta taze `csrf_token` prop'u paylaşıyor; `AppLayout` her `router.on('success')`'te `<meta>`'yı ve `axios` default header'ını güncelliyor; `Messages/Index send()` doğrudan `page.props.csrf_token`'ı `X-CSRF-TOKEN` olarak gönderiyor. `csrf.js` öncelik: explicit token > XSRF cookie > meta.
 - Doğrulama: ilk-deneme SPA mesaj POST 200, yenileme sonrası 200, admin destek yanıtı 200, story silme CSRF hatasız.
+
+## [SESSION] Kıdemli inceleme + güvenli bug düzeltmeleri (2026-06)
+DONE + TEST EDİLDİ (testing agent iteration_1 & iteration_2):
+- [DONE] Bug 1: Seller ilan silme 404 hatası düzeltildi. Seller/AuctionController@destroy artık her zaman seller.auctions.index'e redirect ediyor; Inertia istekleri JSON dalına düşmüyor (X-Inertia header kontrolü). ✅ Test PASS.
+- [DONE] Bug 2: Canlı yayın yalnızca status='active' ilanlar için. Auction::canBroadcast() eklendi; Seller/AuctionController@show + BroadcastController@show/liveStatus/sell backend guard; frontend can_broadcast prop. draft/rejected → buton yok + endpoint 403. ✅ Test PASS.
+- [DONE] Bug 3: Story viewer profil scope. StoryViewer activeOrder ile profilden açılınca yalnızca o kullanıcı; son story sonrası viewer kapanır, başka kullanıcıya geçmez. Index/global davranış korundu. ✅ Test PASS.
+- [DONE] Bug 5: Mobil hızlı teklif çipleri artış (+240) yerine GERÇEK sonuç değerini (1.240 ₺) gösteriyor (canlı min ile reaktif). Çip seçiminde input.focus() kaldırıldı (klavye açılmıyor). ✅ Test PASS.
+- [DONE] Kritik native confirm/alert → SweetAlert (Broadcast.vue endBroadcast/sellTo). Admin reject/delete zaten Swal kullanıyordu.
+
+BLOCKED:
+- [BLOCKED] Bug 4 (Canlı yayın/kamera): Kod tarafı sağlam (double-init guard, device release, mapMediaError ayrımı, config-not-set 503 mesajı, audio-only degrade, unmount cleanup). Gerçek E2E test LIVEKIT_* anahtarları olmadan BLOCKED.
+
+NEEDS DECISION (kullanıcı onayı bekliyor):
+- [NEEDS DECISION] BidController@store race condition (transaction + lockForUpdate planı sunuldu).
+- [NEEDS DECISION] store() başlangıç zamanı geçmişse ilanı admin onayı olmadan 'active' yapıyor (approval bypass). İş kuralı kararı bekliyor.
+- [PENDING REPORT] Performance, SEO, Emergent klasör temizliği raporları.
+
+## [SESSION-2] Bid race + Approval flow + Draft leak (2026-06)
+DONE + TEST EDİLDİ:
+- [DONE] Bid race condition: BidController@store artık DB::transaction + Auction lockForUpdate. Min kilit içinde yeniden hesaplanıp doğrulanıyor; broadcast commit sonrası. 12 senaryo HTTP ile test edildi (tekli/eşzamanlı/aynı-tutar/valid+invalid/farklı-ilan/kapalı/sahip/yetersiz) → bütünlük OK. ✅
+- [DONE] Approval kuralı: store() artık her yeni ilanı 'draft' yapıyor (başlangıç zamanından bağımsız). Admin approve→active, reject→rejected korundu. ✅ (testing agent iteration_3)
+- [DONE][CRITICAL FIX] Draft/rejected ilanlar public'te gizlendi: Auction::scopePublic + BrowseController auctions/explore + kategori sayacı + BidController@show guard (draft/rejected → owner/admin dışında 404). ✅ (testing agent iteration_4, 100%)
+
+NEEDS DECISION / REPORT:
+- [NEEDS DECISION][HIGH] Create auction: varsayılan starts_at ('now', dakika hassasiyeti) `after_or_equal:now` validasyonuna takılıyor + datetime-local TZ belirsizliği. Validasyon değişikliği → kullanıcı onayı bekliyor.
+- [LOW] Admin draft detayında teklif paneli "Bu müzayede sona erdi" gösteriyor (draft için yanlış metin).
+- [LOW] Bid sonrası #bid-error temizlenmiyor; Teklif Ver butonunda çift spinner ikonu.
+- [LOW] Admin approve onay dialogu yok (reject/delete Swal kullanıyor).
+- [LOW] Seller ilan listesi breadcrumb 'Admin' diyor + gereksiz 'Satıcı' kolonu.
+- [LOW] Seed görselleri başlıklarla alakasız.
+- [PENDING REPORT] Performance, SEO, Cleanup raporları hazırlandı (kod değişikliği yok).
+
+## [SESSION-3] Auction state machine + PLANLI + countdown + badge ayrımı (2026-06)
+DONE + TEST EDİLDİ (testing agent iteration_5: 7/7 PASS, %100):
+- [DONE] State machine: Auction::isActive() artık starts_at<=now && ends_at>now şartını da arıyor; isPlanned() eklendi; canBroadcast()=isActive(). Runtime state (DB status değişmez, scheduler yok).
+- [DONE] PLANLI enforcement (backend, HTTP doğrulandı): planlı ilana bid → 422, broadcast → 403. Public görünür ama teklif/yayın yok.
+- [DONE] PLANLI UI: detay bid paneli durum-tabanlı (planlı/draft/rejected/ended/aktif); "Başlamasına: X gün Y saat" dinamik. Üst rozet "Planlı".
+- [DONE] Badge ayrımı: CANLI (is_live=gerçek yayın) / AKTİF (mavi) / PLANLI (amber) / BİTTİ. is_active artık sahte CANLI göstermiyor.
+- [DONE] Countdown: formatCountdown gün-formatlı ("X gün Y saat"), per-auction, runtime tik-tik (dinamik, hardcode YOK). Detay live-timer okunur.
+- [DONE] Create-auction tarih fix: after_or_equal now-5dk toleransı + sunucuda geçmiş "şimdi"yi now()'a sabitleme (TZ Europe/Istanbul). Gerçek geçmiş tarih hâlâ reddedilir.
+- [DONE][LOW] Seller listesi PLANLI etiketi (detayla tutarlı, HTTP doğrulandı); bid sonrası çift şimşek ikonu düzeltildi; planlı kart "Başlıyor" etiketi.
+BLOCKED:
+- [BLOCKED] LiveKit gerçek kamera E2E (anahtar yok).
+PENDING (kullanıcı kararı): Performance index migration, Reverb/WS, SEO server-meta/sitemap, JS code-splitting.
+
+## [SESSION-4] Inertia countdown + story preview + rozet z-index (2026-06)
+DONE + TEST EDİLDİ (testing agent iter_6 & iter_7, %100):
+- [DONE][CRITICAL bug] Inertia SPA navigasyonunda countdown stale: auction-show.js _startTimer() artık her başlatmada #auctionNewConfigRoot[data-remaining-secs] (Vue-reaktif) değerini yeniden okuyor. A→B→A doğru, refresh tutarlı, tik-tik, interval leak yok.
+- [DONE][CRITICAL] Profil vitrini draft sızıntısı: ProfileController showcase ->public() (draft/rejected gizli) + is_active/is_planned/is_live.
+- [DONE] Story upload PREVIEW: .su-preview{display:none} v-show'u eziyordu → StoryUpload.vue inline :style ile düzeltildi (shared CSS/blade bozulmadı).
+- [DONE] Rozet görünürlüğü: idx-live/active/planned/ended-badge'e z-index:3 (resim üstünde). Profil kartları artık anasayfa idx-* rozetlerini kullanıyor (tutarlı, çirkin inline renkler kaldırıldı).
+RAPOR (fix edilmedi): Header arama SearchController::search yalnız kullanıcı sorguluyor (auction bloğu comment'li) → "Sonuç bulunamadı". Seed görselleri alakasız/404.

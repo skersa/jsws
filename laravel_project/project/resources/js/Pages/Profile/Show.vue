@@ -58,7 +58,7 @@ onMounted(boot);
                          :data-story-ids="JSON.stringify(pf.stories.ids)"
                          :data-ring-unseen="pf.stories.ring_unseen"
                          :data-ring-seen="pf.stories.ring_seen"
-                         :onclick="`openStoryViewer(${pf.user.id})`"
+                         :onclick="`openStoryViewer(${pf.user.id}, [${pf.user.id}])`"
                          title="Hikayeleri gör" style="cursor:pointer;">
                         <div class="story-ring pf-avatar-ring" :style="pf.stories.ring_unseen">
                             <img :src="pf.user.avatar" :alt="pf.user.name" id="heroAvatar">
@@ -421,7 +421,10 @@ onMounted(boot);
                         <div class="pf-card-img-wrap">
                             <img :src="a.cover" :alt="a.title">
                             <div class="pf-card-price">{{ a.price_fmt }}</div>
-                            <div class="pf-card-badge"><span class="pf-pulse-dot"></span> Aktif</div>
+                            <div v-if="a.is_live" class="idx-live-badge"><span class="dot"></span> CANLI</div>
+                            <div v-else-if="a.is_active" class="idx-active-badge">AKTİF</div>
+                            <div v-else-if="a.is_planned" class="idx-planned-badge">PLANLI</div>
+                            <div v-else class="idx-ended-badge">BİTTİ</div>
                         </div>
                         <div class="pf-card-body">
                             <div class="pf-card-title">{{ a.title }}</div>

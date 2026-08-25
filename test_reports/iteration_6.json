@@ -1,0 +1,37 @@
+{
+  "summary": "Frontend-only verification of the Inertia SPA stale-countdown fix on auction detail pages (artirdim.com). Primary bug is FIXED: SPA navigation between auction A (nav-3h-DUp1C, ~3h left) and auction B (antika-masa-saati-ve-vazo-seti-MD1c, ~5g23s left) now shows each auction's own correct 'Kalan' value across 2 full A->B->A round trips, matches full-page-reload value, and keeps ticking (2 saat 55 dk -> 2 saat 54 dk after 64s) with no console errors and no duplicate/conflicting values (no interval leak). All 3 requested regressions pass: PLANLI page shows 'Başlamasına: 1 gün 23 saat' with zero bid controls; /browse/auctions cards show only AKTİF (no false CANLI); buyer@test.com successfully bid 18.000 TL on auction B (price 17.760 -> 18.000, no error). Note: Auctions/Show has no in-page auction links, so SPA navigation was performed via in-app Inertia links (Profili Gör -> seller profile card -> auction), which still exercises the stale module-state path since auction-show.js stays loaded.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /live-search?q=", "issue": "Header search placeholder says 'Müzayede, ilan veya kullanıcı ara...' but SearchController::search only queries users (auction search block is commented out). q=antika/vazo/saat returns [] even though matching active auctions exist -> user sees 'Sonuç bulunamadı'."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Public seller profile (/u/seller) auction cards", "issue": "Status badges are wrong: PLANLI auction (planned-HfQfot), ENDED auction (ended-GkyLZi) and DRAFT auction (test-draft-i7Cybz) all render an 'AKTİF' badge. Browse page badges are correct, so the profile card component does not use the same state logic.", "selector": "a[href*='/auctions/'] .badge on /u/seller", "priority": "MEDIUM"},
+      {"component": "Public seller profile (/u/seller)", "issue": "Draft (onay bekleyen) auction is listed to a guest (title + price + link visible) even though the detail page correctly returns 404 for guests -> unapproved-listing data leak.", "selector": "a[href*='test-draft-i7Cybz']", "priority": "MEDIUM"},
+      {"component": "Auction detail gallery / seed images", "issue": "Auction 'Antika Masa Saati ve Vazo Seti' uses an unrelated beer-tap photo; several /browse/auctions card images 404 in console (Failed to load resource: 404).", "selector": "#tab-gallery img", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Fix status badge computation on public profile auction cards (PLANLI/BİTTİ/DRAFT wrongly shown as AKTİF)",
+    "Exclude draft/unapproved auctions from public profile listing for non-owner/non-admin viewers",
+    "Either enable auction results in SearchController::search or change the search placeholder to 'Kullanıcı ara'",
+    "Replace mismatched/404 seed images"
+  ],
+  "critical_code_review_comments": [
+    "auction-show.js _startTimer() correctly re-reads #auctionNewConfigRoot[data-remaining-secs] on every (re)start and __auctionShowInit/__auctionShowCleanup clear timerInt; verified no stale carry-over. Note the module keeps other top-level state (loaded once, never re-imported) - any future per-auction state added there must follow the same re-read-on-init pattern.",
+    "Inertia vue3 3.7.0 uses key=Date.now() per non-preserveState visit, so Auctions/Show remounts on every navigation and onMounted->boot() is reliably called; no page key change needed."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "not tested (frontend-only request)", "frontend": "100% on requested scenarios (5/5)"},
+  "seed_data_creation": "None. One real bid of 18.000 TL placed on antika-masa-saati-ve-vazo-seti-MD1c by buyer@test.com (regression check).",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "buyer@test.com / password (from /app/memory/test_credentials.md) - login works",
+  "context_for_next_testing_agent": "Countdown Inertia-nav bug verified fixed (iteration 6). To force Show->Show SPA nav there is no direct auction-to-auction link on Auctions/Show; use 'Profili Gör' -> /u/seller -> click auction card (visible-only selectors: a:has-text(\"Profili Gör\"):visible). Bid flow: #bid-input placeholder carries min amount, submit via [data-testid=bid-submit-btn]. Open (unfixed) items: profile card badges, draft leak on profile, search only returns users, seed image mismatches.",
+  "rca_of_the_issue": "Original bug: remainingSecs was seeded once at module load; after Inertia SPA navigation the module stayed loaded so the timer kept counting auction A's value on auction B. Fix (verified): _startTimer() re-reads the Vue-reactive data-remaining-secs attribute on #auctionNewConfigRoot each start, and __auctionShowCleanup clears the previous interval on unmount. Observed values: A=10567s -> '2 saat 56 dk', B=516614s -> '5 gün 23 saat', alternating correctly over 2 round trips."
+}

@@ -16,6 +16,7 @@ class BroadcastController extends Controller
     public function show(Auction $auction)
     {
         abort_unless($auction->user_id === auth()->id(), 403);
+        abort_unless($auction->canBroadcast(), 403, 'Bu ilan yayına uygun değil. Yalnızca onaylı (aktif) ilanlar canlı yayına başlayabilir.');
 
         // Yayın moduna geç (canlı). is_live YALNIZCA kamera başlatılınca true olur
         // (liveStatus endpoint'i ile) — böylece izleyici "Canlı İzle" sekmesini
@@ -65,6 +66,11 @@ class BroadcastController extends Controller
 
         $live = $request->boolean('live');
 
+        // Yayına yalnızca onaylı (aktif) ilan geçebilir. Kapatma (live=false) her zaman serbest.
+        if ($live && ! $auction->canBroadcast()) {
+            return response()->json(['success' => false, 'message' => 'Bu ilan yayına uygun değil.'], 403);
+        }
+
         if ($auction->hasFinished()) {
             $live = false;
         }
@@ -113,6 +119,7 @@ class BroadcastController extends Controller
     public function sell(Request $request, Auction $auction)
     {
         abort_unless($auction->user_id === auth()->id(), 403);
+        abort_unless($auction->canBroadcast(), 403, 'Bu ilan için satış yapılamaz (yalnızca aktif ilan).');
 
         $validated = $request->validate([
             'bid_id' => ['required', 'integer', 'exists:bids,id'],

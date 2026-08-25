@@ -1,0 +1,38 @@
+{
+  "summary": "Frontend-only verification of 4 reported bug fixes on artirdim.com (Laravel 12 + Inertia + Vue 3) via Playwright against the public preview URL. Results: BUG 1 (seller listing deletion) STILL BROKEN - Inertia error modal appears; BUG 1b (ownership authorization) PASS; BUG 2 (a/b/c broadcast only for active listings) PASS; BUG 3 (profile story scope) PASS; BUG 3b (homepage global story navigation) PASS; BUG 5 (mobile quick-bid chips absolute value + no auto-focus) PASS.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "DELETE /seller/auctions/{auction} (Seller\\AuctionController@destroy)", "issue": "Inertia router.delete triggers the JSON branch (`request()->ajax()` is TRUE for Inertia/axios requests because of the X-Requested-With: XMLHttpRequest header). Response is `{\"message\":\"Ilan kaldirildi.\"}` instead of the intended redirect, so Inertia throws the modal 'All Inertia requests must receive a valid Inertia response, however a plain JSON response was received.' The user is left on the deleted auction detail URL; refreshing gives 404. Fix: only return JSON when the request is NOT an Inertia request, e.g. `if (!request()->header('X-Inertia') && (request()->wantsJson() || request()->ajax()))`.", "priority": "CRITICAL"}
+    ],
+    "minor": [
+      {"endpoint": "403 error pages (/seller/auctions/{other-seller-slug}, /seller/auctions/{draft}/broadcast)", "issue": "403 pages render Laravel's default light-theme error page while the 404 page is app-themed dark - visual inconsistency."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Seller/Auctions/Show.vue deleteAuction", "issue": "After confirming SweetAlert 'Evet, sil', a full-screen Inertia error modal is displayed (JSON response), no redirect to /seller/auctions occurs, and no success feedback is shown. The record IS deleted server-side (it no longer appears in /seller/auctions), so the failure is purely the response/redirect handling.", "selector": "[data-testid=delete-auction-btn] -> .swal2-confirm", "priority": "CRITICAL"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "403 Forbidden page", "issues": ["Unstyled light-theme Laravel error page breaks the dark app theme"]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Fix Seller\\AuctionController@destroy to not return JSON for Inertia requests (check X-Inertia header) so the redirect to seller.auctions.index actually happens.",
+    "Re-seed a disposable ACTIVE auction for seller@test.com (previous fixture slug test-delete-8u4AR9 was consumed/deleted during this test) so the delete flow can be retested.",
+    "Optional: style the 403 error page to match the app's dark theme."
+  ],
+  "critical_code_review_comments": [
+    "`request()->ajax()` must never be used to branch API vs Inertia responses - Inertia sends X-Requested-With: XMLHttpRequest. Use `request()->header('X-Inertia')` or `request()->inertia()`.",
+    "Frontend delete has no error handler (router.delete without onError), so any non-Inertia response surfaces as a raw Inertia modal instead of a user-friendly message."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "not tested (frontend-only request)", "frontend": "83% (5/6 flows pass; BUG 1 fails)"},
+  "seed_data_creation": "None created. NOTE: fixture auction test-delete-8u4AR9 was soft-deleted as part of BUG 1 testing and is no longer available.",
+  "should_call_test_agent_after_fix": true,
+  "should_main_agent_self_test": false,
+  "test_credentials": "seller@test.com / password, buyer@test.com / password (from /app/memory/test_credentials.md)",
+  "context_for_next_testing_agent": "Login inputs use [data-testid=login-email] / [data-testid=login-password] / [data-testid=login-submit]. Public profile URL is /u/{username} (NOT /profile/{username} - that returns 404); story user is /u/emel.kesero.lu4542 (display name 'Guney Alyanak', 3 stories). Verified: draft auction hides [data-testid=start-broadcast-btn] and shows 'Bu ilan yayina uygun degil (durum: draft).'; /seller/auctions/test-draft-i7Cybz/broadcast returns HTTP 403; active auction shows the broadcast button. Profile story viewer stayed on the same user through 3 nexts and closed on the 4th; prev also stayed in scope. Homepage story bar (STORY_ORDER [2,4,5,6,7,8]) still allows cross-user navigation. Mobile chips (420x850) show 17.520/17.760/18.720 TL and clicking mobile-quick-1 set the input to 17760 without focusing it. Only remaining failure: seller auction delete (needs re-seeded disposable active auction).",
+  "rca_of_the_issue": "Seller\\AuctionController@destroy returns a JSON payload when `request()->wantsJson() || request()->ajax()`. Inertia's axios client sets X-Requested-With: XMLHttpRequest, so ajax() evaluates true for the UI delete request and the redirect to seller.auctions.index is never reached. Inertia then raises 'plain JSON response was received' and the SPA stays on the now soft-deleted auction detail URL, which 404s on refresh. Reproduce: login seller@test.com -> open a seller auction detail -> click [data-testid=delete-auction-btn] -> confirm '.swal2-confirm'."
+}

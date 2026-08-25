@@ -18,6 +18,22 @@ const props = defineProps({
 const page = usePage();
 const csrf = () => page.props.csrf_token || document.querySelector('meta[name="csrf-token"]')?.content || '';
 
+// Native confirm/alert yerine mevcut SweetAlert2 (Swal) kullan; yoksa native'e düş
+function swalConfirm(opts) {
+    if (window.Swal) {
+        return window.Swal.fire({
+            showCancelButton: true, reverseButtons: true, heightAuto: false,
+            confirmButtonColor: '#ef4444', cancelButtonText: 'Vazgeç', ...opts,
+        }).then((r) => r.isConfirmed);
+    }
+    return Promise.resolve(window.confirm((opts.title || '') + (opts.text ? '\n' + opts.text : '')));
+}
+function swalToast(icon, title) {
+    if (window.Swal) {
+        window.Swal.fire({ toast: true, position: 'top-end', timer: 3400, showConfirmButton: false, icon, title, heightAuto: false });
+    }
+}
+
 const videoEl = ref(null);
 const status = ref('idle');          // idle | connecting | live | error
 const errorMsg = ref('');
@@ -182,12 +198,12 @@ async function stopRoom(notify = true) {
 }
 
 async function endBroadcast() {
-    if (!confirm('Yayını sonlandırmak istediğine emin misin?')) return;
+    if (!await swalConfirm({ title: 'Yayını sonlandır?', text: 'Canlı yayın kapatılacak.', icon: 'warning', confirmButtonText: 'Evet, bitir' })) return;
     await stopRoom(true);
 }
 
 async function sellTo(bid) {
-    if (!confirm(`${bid.name} — ${formatPrice(bid.amount)} teklifine satış yapılsın mı?`)) return;
+    if (!await swalConfirm({ title: 'Satış onayı', text: `${bid.name} — ${formatPrice(bid.amount)} teklifine satış yapılsın mı?`, icon: 'question', confirmButtonColor: '#16a34a', confirmButtonText: 'Evet, sat' })) return;
     try {
         const res = await fetch(props.routes.sell, {
             method: 'POST', credentials: 'include',
@@ -197,12 +213,12 @@ async function sellTo(bid) {
         const j = await res.json();
         if (res.ok && j.success) {
             await stopRoom(true);
-            alert(`Satış tamam! Kazanan: ${j.winner_name} — Sipariş: ${j.order_number}`);
+            swalToast('success', `Satış tamam! Kazanan: ${j.winner_name} — Sipariş: ${j.order_number}`);
             router.visit(props.routes.view_public);
         } else {
-            alert(j.message || 'Satış yapılamadı.');
+            swalToast('error', j.message || 'Satış yapılamadı.');
         }
-    } catch (e) { alert('Satış sırasında hata oluştu.'); }
+    } catch (e) { swalToast('error', 'Satış sırasında hata oluştu.'); }
 }
 
 function formatPrice(v) {

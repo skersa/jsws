@@ -9,9 +9,13 @@ const props = defineProps({
 });
 
 const now = useClock();
-const timer = computed(() => props.auction.ends_at
-    ? formatCountdown(props.auction.ends_at, now.value)
-    : { text: props.auction.time_left, critical: false });
+const timer = computed(() => {
+    const a = props.auction;
+    if (a.is_planned && a.starts_at) return formatCountdown(a.starts_at, now.value);
+    if (a.ends_at) return formatCountdown(a.ends_at, now.value);
+    return { text: a.time_left, critical: false };
+});
+const timerLabel = computed(() => (props.auction.is_planned ? 'Başlıyor' : 'Kalan'));
 
 function onImgLoad(e) {
     e.target.classList.add('loaded');
@@ -23,7 +27,9 @@ function onImgLoad(e) {
     <Link :href="auction.show_url" class="idx-card">
         <div class="idx-card-img">
             <img :src="auction.cover_url" :alt="auction.title" loading="eager" @load="onImgLoad" @error="onImgLoad">
-            <div v-if="auction.is_active" class="idx-live-badge"><span class="dot"></span> CANLI</div>
+            <div v-if="auction.is_live" class="idx-live-badge"><span class="dot"></span> CANLI</div>
+            <div v-else-if="auction.is_active" class="idx-active-badge">AKTİF</div>
+            <div v-else-if="auction.is_planned" class="idx-planned-badge">PLANLI</div>
             <div v-else class="idx-ended-badge">BİTTİ</div>
             <div class="idx-price-overlay">{{ auction.display_price }}</div>
         </div>
@@ -40,7 +46,7 @@ function onImgLoad(e) {
                     <div class="idx-bid-val">{{ auction.display_price }}</div>
                 </div>
                 <div>
-                    <div class="idx-timer-lbl">Kalan</div>
+                    <div class="idx-timer-lbl">{{ timerLabel }}</div>
                     <div class="idx-timer-val" :class="{ critical: timer.critical }">{{ timer.text }}</div>
                 </div>
             </div>

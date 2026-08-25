@@ -1,0 +1,29 @@
+{
+  "summary": "Frontend-only retest of the CRITICAL draft-visibility leak from iteration_3. ALL requested scenarios PASS: (a) guest hitting /auctions/test-draft-i7Cybz gets the 404 page (no auction detail rendered), (b) guest search q='TEST Onay' on /browse/auctions returns '0 sonuç / Aramanızla eşleşen artırma bulunamadı.', (c) homepage / and /browse/explore do not list the draft, (d) category counts on browse are consistent (Elektronik 4 + Antika 5 + Sanat 2 + Mücevherat 2 = 13 = '13 sonuç' shown for the active list, no inflation). Owner (seller@test.com) and admin (admin@test.com) still get 200 with status badge 'Bekliyor' on the same URL. No regression to public browsing: /browse/auctions (no filter and status=active) shows 'Antika Masa Saati' and the active detail /auctions/antika-masa-saati-ve-vazo-seti-MD1c renders 200. Code review of Auction::scopePublic, Front/BrowseController@auctions/@explore and General/BidController@show confirms the guard + public() scope are in place (guard runs before view_count increment).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Auctions/Show.vue bid panel (draft, admin view)", "issue": "When ADMIN opens the draft detail, the bid panel shows 'Bu müzayede sona erdi.' although the status badge is 'Bekliyor' (onay bekliyor). Misleading copy for draft/rejected states; owner view correctly shows 'Kendi ilanınıza teklif veremezsiniz.'", "selector": "[data-testid=bid-panel] / detail right column", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "No action required for the draft-visibility fix - verified fixed in UI as guest/owner/admin.",
+    "OPTIONAL (LOW): show an 'Onay bekliyor / yayında değil' message instead of 'Bu müzayede sona erdi.' in the bid panel for draft/rejected auctions viewed by owner/admin.",
+    "Still open from iteration_3 (not retested per request): HIGH create-auction default starts_at validation failure; LOW cosmetic bid-error/spinner, admin approve confirm dialog, seller breadcrumb 'Admin', seed image mismatch."
+  ],
+  "critical_code_review_comments": [
+    "Auction::scopePublic('active','ended','sold') + BrowseController public() + constrained withCount correctly exclude draft/rejected/cancelled from public listings and category counts.",
+    "BidController@show guard (abort_unless owner||admin, 404) is placed before increment('view_count'), so guests no longer inflate draft view counts - correct ordering."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "not tested (frontend-only request)", "frontend": "100% - 3/3 requested scenarios pass (draft not public, owner/admin can see, public browse no regression)"},
+  "seed_data_creation": "None. No data created or modified; only read-only navigation plus logins as seller@test.com and admin@test.com.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "seller@test.com / admin@test.com / buyer@test.com, password 'password' (/app/memory/test_credentials.md)",
+  "context_for_next_testing_agent": "Draft leak (iteration_3 CRITICAL) is CONFIRMED FIXED end-to-end in the UI. Draft slug test-draft-i7Cybz: guest=404 page, owner/admin=200 with 'Bekliyor'. Active slug antika-masa-saati-ve-vazo-seti-MD1c works. Laravel project lives at /app/laravel_project/project (not /app/backend). Remaining untested/blocked: create-auction default-date validation (HIGH, handled separately), LiveKit live streaming (BLOCKED - no keys).",
+  "rca_of_the_issue": "Previous leak was caused by unscoped public queries; now Auction::scopePublic restricts to active/ended/sold, BrowseController uses ->public() and constrained withCount, and BidController@show 404s for draft/rejected unless owner/admin. Verified from the UI."
+}

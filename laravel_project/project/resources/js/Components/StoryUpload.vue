@@ -110,12 +110,12 @@ onBeforeUnmount(() => {
                 <form :action="storeUrl" method="POST" enctype="multipart/form-data" @submit.prevent="submit">
                     <label class="su-drop">
                         <input ref="fileEl" type="file" accept="image/*,video/*" hidden @change="onFile" data-testid="story-file-input">
-                        <div v-show="!previewUrl" class="su-ph">
+                        <div class="su-ph" :style="{ display: previewUrl ? 'none' : 'flex' }">
                             <i class="bi bi-cloud-arrow-up"></i>
                             <span>Görsel veya video seç</span>
                             <small>JPG, PNG, MP4 · max 20MB</small>
                         </div>
-                        <div v-show="previewUrl" class="su-preview">
+                        <div class="su-preview" :style="{ display: previewUrl ? 'block' : 'none' }">
                             <video v-if="previewUrl && isVideo" :src="previewUrl" muted autoplay loop playsinline></video>
                             <img v-else-if="previewUrl" :src="previewUrl" alt="">
                         </div>

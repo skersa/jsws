@@ -11,11 +11,14 @@ export function useClock() {
 export function formatCountdown(endsTs, nowTs) {
     const diff = endsTs - nowTs;
     if (diff <= 0) return { text: 'Bitti', critical: true };
-    const h = Math.floor(diff / 3600);
+    const d = Math.floor(diff / 86400);
+    const h = Math.floor((diff % 86400) / 3600);
     const m = Math.floor((diff % 3600) / 60);
     const s = diff % 60;
-    const text = h > 0
-        ? `${h}s ${String(m).padStart(2, '0')}d`
-        : `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    let text;
+    if (d > 0) text = `${d} gün ${h} saat`;
+    else if (h > 0) text = `${h} saat ${m} dk`;
+    else if (m > 0) text = `${m} dk ${String(s).padStart(2, '0')} sn`;
+    else text = `${s} sn`;
     return { text, critical: diff < 1800 };
 }

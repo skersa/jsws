@@ -16,6 +16,7 @@ const IMG_DURATION = 5000;
 const open = ref(false);
 const curUser = ref(null);
 const curIndex = ref(0);
+const activeOrder = ref(null); // profil scope: [uid] → sadece o kullanıcı; null → global (STORY_ORDER)
 const ready = ref(false);
 const paused = ref(false);
 const mediaDuration = ref(IMG_DURATION);
@@ -28,11 +29,15 @@ const u = computed(() => (curUser.value != null && window.STORY_DATA) ? window.S
 const item = computed(() => (u.value && u.value.items) ? u.value.items[curIndex.value] : null);
 const items = computed(() => (u.value && u.value.items) ? u.value.items : []);
 
-/* ── Kullanıcı sırası (kullanıcılar arası geçiş) ── */
+/* ── Kullanıcı sırası (kullanıcılar arası geçiş) ──
+   activeOrder set ise (profilden açıldı) YALNIZCA o scope kullanılır → başka kullanıcıya geçilmez.
+   null ise ana sayfa davranışı: global window.STORY_ORDER. */
 function order() {
-    const ord = Array.isArray(window.STORY_ORDER) ? window.STORY_ORDER.slice() : [];
-    if (curUser.value != null && !ord.includes(curUser.value)) ord.push(curUser.value);
-    return ord;
+    const base = Array.isArray(activeOrder.value)
+        ? activeOrder.value.slice()
+        : (Array.isArray(window.STORY_ORDER) ? window.STORY_ORDER.slice() : []);
+    if (curUser.value != null && !base.includes(curUser.value)) base.push(curUser.value);
+    return base;
 }
 
 /* ── Görülen hikaye halkası (Instagram: soluk) ── */
@@ -146,10 +151,12 @@ function gotoUser(uid, index) {
     markUserSeen(uid);
     return true;
 }
-function openViewer(uid) {
+function openViewer(uid, scopeOrder = null) {
     hydrateFromSources(uid);
     const usr = window.STORY_DATA?.[uid];
     if (!usr || !usr.items || !usr.items.length) return;
+    // Profilden açıldıysa scopeOrder=[uid] → navigation o kullanıcıyla sınırlı kalır
+    activeOrder.value = Array.isArray(scopeOrder) ? scopeOrder.slice() : null;
     open.value = true;
     document.body.style.overflow = 'hidden';
     gotoUser(uid, 0);
@@ -157,6 +164,7 @@ function openViewer(uid) {
 function close() {
     open.value = false;
     paused.value = false;
+    activeOrder.value = null;
     document.body.style.overflow = '';
     clearTimer();
 }

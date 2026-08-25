@@ -4,9 +4,10 @@ export default { layout: AppLayout };
 </script>
 
 <script setup>
-import { onMounted, onUnmounted, nextTick } from 'vue';
+import { onMounted, onUnmounted, nextTick, ref, computed } from 'vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { connectRoom } from '@/composables/useLiveKit';
+import { useClock, formatCountdown } from '@/useClock';
 
 const props = defineProps({
     a: Object,
@@ -17,22 +18,29 @@ function messageSeller() {
     router.post(props.config.messages_start_url, { user_id: props.a.seller.id });
 }
 
-// Mobil: tek dokunuşla hızlı teklif — CANLI minimumdan hesaplar, sadece inputa yazar (göndermez)
+// Mobil: tek dokunuşla hızlı teklif — CANLI minimumdan GERÇEK sonuç değerini hesaplar, sadece inputa yazar (göndermez)
 const bidStep = Number(props.config?.min_increment) || 0;
 function fmtTL(v) { return new Intl.NumberFormat('tr-TR').format(Math.round(v)) + ' ₺'; }
-const quickSteps = [
-    { mult: 0, label: 'En düşük' },
-    { mult: 1, label: '+' + fmtTL(bidStep) },
-    { mult: 5, label: '+' + fmtTL(bidStep * 5) },
-];
-function quickBidMobile(mult) {
+// Canlı minimum teklif; auction-show.js her yeni teklifte günceller → çipler bayat değer göstermez
+const liveMin = ref(Number(props.a?.min_bid) || 0);
+// Planlı ilan için başlangıca kalan süre (canlı, paylaşılan formatCountdown ile)
+const clockNow = useClock();
+const startsIn = computed(() => (props.a?.is_planned && props.a?.starts_at_ts)
+    ? formatCountdown(props.a.starts_at_ts, clockNow.value).text : '');
+const quickSteps = computed(() => {
+    const base = liveMin.value || 0;
+    return [
+        { amount: base,               label: fmtTL(base) },
+        { amount: base + bidStep,     label: fmtTL(base + bidStep) },
+        { amount: base + bidStep * 5, label: fmtTL(base + bidStep * 5) },
+    ];
+});
+function quickBidMobile(amount) {
     const input = document.getElementById('bid-input-mobile');
     if (!input) return;
-    // auction-show.js her yeni teklifte input.min'i canlı günceller → bayat değer sorunu biter
-    const liveMin = Number(input.min) || Number(props.a.min_bid) || 0;
-    input.value = liveMin + bidStep * mult;
+    input.value = amount;
     input.dispatchEvent(new Event('input', { bubbles: true }));
-    input.focus();
+    // Otomatik focus YOK — kullanıcı kendisi dokunmadıkça mobil klavye açılmasın
     // Görsel ipucu: "Teklif Ver" butonunu kısa vurgula (kullanıcı basınca gönderilecek)
     const btn = document.querySelector('.bid-sticky-bar .sticky-submit');
     if (btn) { btn.classList.add('pulse'); setTimeout(() => btn.classList.remove('pulse'), 700); }
@@ -62,6 +70,8 @@ function loadScript(src) {
 async function boot() {
     // Mobil/masaüstü: ilan detayına girince sayfa en üstten açılmalı
     try { window.scrollTo({ top: 0, left: 0 }); } catch (e) { window.scrollTo(0, 0); }
+    // Canlı minimum güncellemelerini dinle → mobil hızlı teklif çipleri gerçek değeri gösterir
+    window.__onLiveMin = (v) => { const n = Number(v); if (n > 0) liveMin.value = n; };
     await nextTick();
     // config.js bir IIFE — her mount'ta güvenle yeniden çalışıp window.* değerlerini tazeler
     await loadScript('/assets/js/custom/auctions-new-config.js');
@@ -111,6 +121,7 @@ async function connectViewerStream() {
 onMounted(boot);
 
 onUnmounted(() => {
+    if (window.__onLiveMin) delete window.__onLiveMin;
     if (window.__auctionShowCleanup) { try { window.__auctionShowCleanup(); } catch (e) {} }
     if (lkRoom) { try { lkRoom.disconnect(); } catch (e) {} lkRoom = null; }
     // sadece config script'lerini temizle; auction-show.js tekrar kullanılmak üzere kalır
@@ -139,7 +150,7 @@ onUnmounted(() => {
             </div>
             <div class="au-status-badges">
                 <span class="a-badge" :class="a.status_type">{{ a.status_label }}</span>
-                <span v-if="a.is_active" class="live-pill"><span class="live-dot"></span> Canlı</span>
+                <span v-if="a.is_live && !a.has_finished" class="live-pill"><span class="live-dot"></span> CANLI</span>
                 <span class="viewer-pill">
                     <i class="bi bi-eye" style="font-size:12px;"></i>
                     <span id="viewer-count" data-testid="viewer-count">—</span> izleyici
@@ -358,35 +369,53 @@ onUnmounted(() => {
                         <div class="stat-cell"><div class="stat-lbl">İzleyici</div><div class="stat-val" id="live-viewer-stat">—</div></div>
                     </div>
                     <div class="bid-form-area">
-                        <template v-if="config.is_auth === '1'">
-                            <template v-if="a.is_active && !a.is_owner">
-                                <div class="quick-grid" id="quick-btns">
-                                    <button v-for="(q, qi) in a.quick" :key="qi" class="quick-btn" :onclick="`setQuick(${q.val})`">
-                                        +{{ q.inc_fmt }}
-                                        <span>{{ q.val_fmt }}</span>
+                        <!-- PLANLI: onaylı ama başlangıç saati gelmedi → teklif yok -->
+                        <div v-if="a.is_planned" class="alert alert-info mb-0" style="font-size:13px;border-radius:10px;" data-testid="auction-planned-box">
+                            <div style="font-weight:700;"><i class="bi bi-clock-history me-1"></i> Planlı — henüz başlamadı</div>
+                            <div class="mt-1">Başlangıç: {{ a.starts_at_fmt }}</div>
+                            <div class="mt-1" v-if="startsIn">Başlamasına: {{ startsIn }}</div>
+                            <div class="mt-1" style="opacity:.8;">Açık artırma başladığında teklif verebilirsiniz.</div>
+                        </div>
+                        <!-- DRAFT / REJECTED (yalnızca sahip/admin görür) -->
+                        <div v-else-if="a.status === 'draft'" class="alert alert-warning mb-0" style="font-size:13px;border-radius:10px;">
+                            <i class="bi bi-hourglass-split me-1"></i> Bu ilan admin onayı bekliyor.
+                        </div>
+                        <div v-else-if="a.status === 'rejected'" class="alert alert-danger mb-0" style="font-size:13px;border-radius:10px;">
+                            <i class="bi bi-x-circle me-1"></i> Bu ilan reddedildi.
+                        </div>
+                        <!-- SONA ERDİ -->
+                        <div v-else-if="!a.is_active" class="alert alert-danger mb-0" style="font-size:13px;border-radius:10px;">
+                            <i class="bi bi-clock me-1"></i> Bu müzayede sona erdi.
+                        </div>
+                        <!-- AKTİF: teklife açık -->
+                        <template v-else>
+                            <template v-if="config.is_auth === '1'">
+                                <template v-if="!a.is_owner">
+                                    <div class="quick-grid" id="quick-btns">
+                                        <button v-for="(q, qi) in a.quick" :key="qi" class="quick-btn" :onclick="`setQuick(${q.val})`">
+                                            +{{ q.inc_fmt }}
+                                            <span>{{ q.val_fmt }}</span>
+                                        </button>
+                                    </div>
+                                    <div class="bid-input-wrap">
+                                        <input type="number" id="bid-input" name="amount" data-testid="bid-amount-input"
+                                               :min="a.min_bid" :step="config.min_increment" :placeholder="`Min: ${a.min_bid_fmt}`">
+                                        <div class="currency">₺</div>
+                                    </div>
+                                    <div class="bid-error" id="bid-error"></div>
+                                    <button class="bid-submit" id="bid-btn" onclick="submitBid()" data-testid="bid-submit-btn">
+                                        <i class="bi bi-lightning-charge-fill"></i>
+                                        <span id="bid-btn-text">Teklif Ver</span>
                                     </button>
+                                </template>
+                                <div v-else class="alert alert-warning mb-0" style="font-size:13px;border-radius:10px;">
+                                    <i class="bi bi-info-circle me-1"></i> Kendi ilanınıza teklif veremezsiniz.
                                 </div>
-                                <div class="bid-input-wrap">
-                                    <input type="number" id="bid-input" name="amount" data-testid="bid-amount-input"
-                                           :min="a.min_bid" :step="config.min_increment" :placeholder="`Min: ${a.min_bid_fmt}`">
-                                    <div class="currency">₺</div>
-                                </div>
-                                <div class="bid-error" id="bid-error"></div>
-                                <button class="bid-submit" id="bid-btn" onclick="submitBid()" data-testid="bid-submit-btn">
-                                    <i class="bi bi-lightning-charge-fill"></i>
-                                    <span id="bid-btn-text">Teklif Ver</span>
-                                </button>
                             </template>
-                            <div v-else-if="a.is_owner" class="alert alert-warning mb-0" style="font-size:13px;border-radius:10px;">
-                                <i class="bi bi-info-circle me-1"></i> Kendi ilanınıza teklif veremezsiniz.
-                            </div>
-                            <div v-else class="alert alert-danger mb-0" style="font-size:13px;border-radius:10px;">
-                                <i class="bi bi-clock me-1"></i> Bu müzayede sona erdi.
-                            </div>
+                            <Link v-else :href="config.login_url" class="bid-submit" style="text-decoration:none;">
+                                <i class="bi bi-box-arrow-in-right"></i> Teklif vermek için giriş yap
+                            </Link>
                         </template>
-                        <Link v-else :href="config.login_url" class="bid-submit" style="text-decoration:none;">
-                            <i class="bi bi-box-arrow-in-right"></i> Teklif vermek için giriş yap
-                        </Link>
                     </div>
                 </div>
 
@@ -474,7 +503,7 @@ onUnmounted(() => {
             <!-- Tek dokunuşla hızlı teklif: inputa yazar (otomatik GÖNDERMEZ) -->
             <div class="sticky-quick-row" data-testid="mobile-quick-row">
                 <button v-for="(qs, qi) in quickSteps" :key="qi" type="button" class="sticky-quick-chip"
-                        @click="quickBidMobile(qs.mult)" :data-testid="`mobile-quick-${qi}`">
+                        @click="quickBidMobile(qs.amount)" :data-testid="`mobile-quick-${qi}`">
                     {{ qs.label }}
                 </button>
             </div>

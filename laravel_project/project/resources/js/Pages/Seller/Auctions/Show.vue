@@ -27,9 +27,7 @@ function saveStream() {
 const liveDisabled = computed(() => streamForm.stream_mode === 'video');
 
 function deleteAuction() {
-    const doDelete = () => router.delete(a.destroy_url, {
-        onSuccess: () => router.visit(a.index_url),
-    });
+    const doDelete = () => router.delete(a.destroy_url);
     if (typeof window.Swal !== 'undefined') {
         window.Swal.fire({
             title: 'İlanı silmek istediğine emin misin?',

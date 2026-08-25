@@ -75,9 +75,18 @@ class Auction extends Model implements HasMedia
         return $diff->i . 'dk';
     }
 
-    public function isActive(): bool  { return $this->status === 'active' && $this->ends_at->isFuture(); }
+    public function isActive(): bool  { return $this->status === 'active' && $this->starts_at->lte(now()) && $this->ends_at->isFuture(); }
     public function isEnding(): bool  { return $this->isActive() && $this->ends_at->diffInHours() < 24; }
     public function bidCount(): int   { return $this->bids()->count(); }
+
+    /** Onaylı (active) ama başlangıç saati henüz gelmedi → PLANLI. Teklif/yayın açılmaz. */
+    public function isPlanned(): bool { return $this->status === 'active' && $this->starts_at->isFuture() && $this->ends_at->isFuture(); }
+
+    /** Canlı yayına yalnızca teklife açık (başlamış, bitmemiş, onaylı) ilan başlayabilir. Frontend + backend ortak kural. */
+    public function canBroadcast(): bool { return $this->isActive(); }
+
+    /** Herkese açık (public) sayfalarda görünebilecek ilanlar: yalnızca onaydan geçmiş statüler. draft/rejected/cancelled gizli. */
+    public function scopePublic($query) { return $query->whereIn('status', ['active', 'ended', 'sold']); }
 
     /** Frontend (Inertia/Vue) kart bileşeni için serialize edilmiş veri */
     public function toCard(): array
@@ -88,6 +97,8 @@ class Auction extends Model implements HasMedia
             'title'          => $this->title,
             'cover_url'      => $this->coverUrl(),
             'is_active'      => $this->isActive(),
+            'is_planned'     => $this->isPlanned(),
+            'is_live'        => (bool) $this->is_live,
             'status'         => $this->status,
             'display_price'  => $this->displayPrice(),
             'category_name'  => $this->category?->name,
@@ -95,6 +106,7 @@ class Auction extends Model implements HasMedia
             'location'       => $this->location ? \Illuminate\Support\Str::limit($this->location, 18) : null,
             'time_left'      => $this->timeLeft(),
             'ends_at'        => $this->ends_at?->timestamp,
+            'starts_at'      => $this->starts_at?->timestamp,
             'show_url'       => route('auctions.show', $this->slug),
         ];
     }

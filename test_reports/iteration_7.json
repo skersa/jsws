@@ -1,0 +1,31 @@
+{
+  "summary": "Frontend-only verification of two fixes on artirdim.com: (1) Story upload image preview visibility, (2) auction status badge visibility on home/browse and badge consistency on the public profile showcase. Plus quick regression on auction detail countdown and PLANLI page. ALL 4 requested checks PASS. Verified compiled assets (public/build/assets/app-DtSW-w3u.js, theme-new.css) are newer than the edited sources, so the fixes are live.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Homepage / Browse / auction detail", "issues": ["6 seeded auction images 404: /storage/auctions/a2.jpg, a3.jpg, a4.jpg, a5.jpg, a6.jpg, a8.jpg. Fallback 'Görsel bulunamadı' placeholder renders correctly so no visual break, but console shows 6 x 404 and most cards show placeholders instead of photos."]},
+      {"screen": "Public profile /u/seller", "issues": ["Stats show '5 İLAN' while the guest showcase renders only 4 cards (draft correctly excluded) — the listing count appears to include the non-public draft, which is inconsistent for guests."]},
+      {"screen": "Auction detail (PLANLI /auctions/planned-HfQfot)", "issues": ["Sidebar 'KALAN' shows 8 gün 23 saat (time-to-end) while the planned box says 'Başlamasına: 1 gün 23 saat' — two different countdowns side by side can confuse; consider hiding/relabelling KALAN for planned auctions."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Re-seed or fix missing /storage/auctions/a2..a8.jpg image files (6 x 404).",
+    "Optional: make profile 'İLAN' count use the same ->public() scope as the showcase for guests.",
+    "Optional: for PLANLI auctions, hide or relabel the sidebar KALAN countdown to avoid conflicting with 'Başlamasına'."
+  ],
+  "critical_code_review_comments": [
+    "StoryUpload.vue relies on inline :style display overrides to beat the CSS `display:none` on .su-preview/.su-ph. This works but is fragile — prefer removing the display:none from CSS and using v-show, otherwise a future CSS !important will re-break it.",
+    "All idx-*-badge classes duplicate position/typography rules; consider a shared .idx-badge base class + colour modifiers to avoid the z-index-style regression happening again on one variant only."
+  ],
+  "updated_files": [],
+  "success_rate": { "backend": "not tested (frontend-only request)", "frontend": "100% (4/4 requested checks passed)" },
+  "seed_data_creation": "None persisted. Created a temp 60x60 PNG at /tmp/story_test.png for the file-input test; story was NOT submitted.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "seller@test.com / password (login OK, redirects to /seller/dashboard)",
+  "context_for_next_testing_agent": "Verified results: (1) STORY PREVIEW PASS — modal opens both via UI [data-testid=story-add] and window.openStoryUpload(); after set_input_files on [data-testid=story-file-input], .su-ph computed display goes flex->none and .su-preview none->block with 350x260 box and an <img> with blob: src (naturalWidth 60). (2) HOME badges: 20 visible badges, all z-index:3, computed display block, visibility visible, offsetParent set (AKTİF/PLANLI/BİTTİ). BROWSE /browse/auctions: 12 visible AKTİF badges. PASS. (3) PROFILE /u/seller: exactly 4 showcase cards with correct distinct badges — NAV COUNTDOWN TEST 3 Saat=AKTİF, Antika Masa Saati=AKTİF, PLANLI TEST Ilan=PLANLI, SONA ERMIS TEST Ilan=BİTTİ; draft 'Onay Bekleyen' NOT present for guest. PASS. (4) REGRESSION: /auctions/antika-masa-saati-ve-vazo-seti-MD1c loads, #live-timer='5 gün 23 saat' (day granularity so no visible tick in 3s); /auctions/nav-3h-DUp1C #live-timer ticked '2 saat 42 dk' -> '2 saat 41 dk' confirming the ticker runs. /auctions/planned-HfQfot shows the planned box ('Planlı — henüz başlamadı', start date, 'Başlamasına') and 0 bid-form elements. LiveKit streaming remains untested/BLOCKED (no keys).",
+  "rca_of_the_issue": "Both original defects were CSS-specificity/stacking issues: .su-preview had a hard `display:none` in CSS that overrode Vue's v-show (now beaten by an inline :style binding), and the idx-* badge classes were absolutely positioned without z-index so the card image/overlay painted above them (now z-index:3). Both fixes are present in source and in the freshly built Vite bundle, and confirmed live in the browser."
+}

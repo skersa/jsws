@@ -1,0 +1,32 @@
+{
+  "summary": "Focused re-test of BUG 1 only (seller listing deletion) on artirdim.com via Playwright against the public preview URL. RESULT: BUG 1 is FIXED. Logged in as seller@test.com, opened /seller/auctions/test-delete-DXPtMg (ACTIVE, owned by seller, id=19, not deleted before test), clicked [data-testid=delete-auction-btn], confirmed .swal2-confirm. No Inertia error modal / no 'plain JSON response was received'; the SPA redirected to /seller/auctions, the success flash 'Ilan kaldirildi.' rendered, and the deleted auction no longer appears in the list (counts dropped to 2 total / 1 draft / 1 active). Refreshing /seller/auctions loads cleanly (title 'artirdim | Ilan Yonetimi', no errors). Direct GET of the deleted auction detail correctly returns HTTP 404. No other bugs retested per request.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/seller/auctions (Seller/Auctions/Index)", "issues": ["Breadcrumb reads 'Admin / Ilanlar' on the seller listing page - should be 'Satici' (seller) context, not 'Admin'. Cosmetic/label bug, likely copied from the admin index page."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Optional (minor): fix breadcrumb label on /seller/auctions which currently says 'Admin / Ilanlar'.",
+    "Optional (from iteration_1, still open): style the 403 error page to match the dark app theme.",
+    "Re-seed a new disposable ACTIVE auction for seller@test.com if the delete flow needs testing again - test-delete-DXPtMg was consumed by this test."
+  ],
+  "critical_code_review_comments": [
+    "Fix in Seller\\AuctionController@destroy (excluding Inertia via X-Inertia header before the wantsJson()/ajax() JSON branch) is correct and verified end-to-end.",
+    "Frontend delete still has no router.delete onError handler; any future non-Inertia/500 response would surface as a raw Inertia modal rather than a user-friendly message."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "not tested (frontend-only request)", "frontend": "100% (1/1 retested flow passes)"},
+  "seed_data_creation": "None created. Fixture auction slug test-delete-DXPtMg (id 19) was soft-deleted as part of this test and is no longer available.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "seller@test.com / password (from /app/memory/test_credentials.md)",
+  "context_for_next_testing_agent": "BUG 1 (seller listing delete) verified FIXED in iteration_2: delete -> SweetAlert confirm -> redirect to /seller/auctions with success flash, deleted item removed, refresh clean, deleted detail URL 404s. Bugs 1b/2/3/3b/5 passed in iteration_1 and were not retested. Both disposable delete fixtures (test-delete-8u4AR9, test-delete-DXPtMg) are now consumed; a new one must be seeded before retesting deletion. Remaining seller fixtures: antika-masa-saati-ve-vazo-seti-MD1c (active), test-draft-i7Cybz (draft). Minor open cosmetic items: 'Admin / Ilanlar' breadcrumb on seller index, unstyled light-theme 403 page.",
+  "rca_of_the_issue": "Original RCA (iteration_1): destroy() branched to JSON because request()->ajax() is true for Inertia requests (X-Requested-With: XMLHttpRequest), so Inertia received a plain JSON body and raised the error modal. The fix adds a `! request()->header('X-Inertia')` guard so Inertia requests fall through to redirect()->route('seller.auctions.index'). Verified working."
+}

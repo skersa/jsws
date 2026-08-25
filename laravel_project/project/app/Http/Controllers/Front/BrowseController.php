@@ -12,9 +12,12 @@ class BrowseController extends Controller
 {
     public function auctions(Request $request)
     {
-        $categories = Category::active()->ordered()->withCount('auctions')->get();
+        $categories = Category::active()->ordered()
+            ->withCount(['auctions as auctions_count' => fn ($q) => $q->whereIn('status', ['active', 'ended', 'sold'])])
+            ->get();
 
-        $query = Auction::query()->with(['category', 'cover']);
+        // Public listede yalnızca onaydan geçmiş statüler (draft/rejected gizli)
+        $query = Auction::query()->public()->with(['category', 'cover']);
 
         if ($request->filled('q')) {
             $query->where('title', 'like', '%' . $request->q . '%');
@@ -77,7 +80,9 @@ class BrowseController extends Controller
 
     public function explore()
     {
-        $categories = Category::active()->whereNull('parent_id')->ordered()->withCount('auctions')->take(6)->get();
+        $categories = Category::active()->whereNull('parent_id')->ordered()
+            ->withCount(['auctions as auctions_count' => fn ($q) => $q->whereIn('status', ['active', 'ended', 'sold'])])
+            ->take(6)->get();
 
         $featuredAuctions = Auction::query()
             ->with(['category', 'cover'])
@@ -88,6 +93,7 @@ class BrowseController extends Controller
 
         $newAuctions = Auction::query()
             ->with(['category', 'cover'])
+            ->public()
             ->latest()->take(8)->get();
 
         return Inertia::render('Browse/Explore', [

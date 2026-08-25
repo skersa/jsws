@@ -1,0 +1,42 @@
+{
+  "summary": "Frontend-only UI verification of (a) the new 'every new auction is DRAFT' approval rule, (b) draft not public, (c) admin approve, (d) bid regression after the DB-transaction/lockForUpdate refactor. Approval rule + admin approve + bid flow all WORK. Two real defects found: (1) HIGH - creating an auction with the DEFAULT start date always fails validation ('starts at now tarihinden sonra veya eşit olmalıdır') so a normal seller cannot publish; (2) CRITICAL - DRAFT (pending-approval) auctions are publicly visible in /browse/auctions search results and their public detail page /auctions/{slug} is fully accessible to guests.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Seller/Auctions/Create.vue + Seller\\AuctionController@store", "issue": "Submitting the form with the DEFAULT starts_at (defaults.starts_at = now()->format('Y-m-d\\\\TH:i'), minute precision) ALWAYS fails 'starts_at' => 'required|date|after_or_equal:now' because the truncated minute value is already in the past by submit time. Reproduced twice: form returns '1 hata var' + 'starts at now tarihinden sonra veya eşit olmalıdır'. Creation only succeeded after manually pushing starts_at +15 min. Fix: relax rule (e.g. after_or_equal:now->subMinutes(5) / today) or clamp starts_at to now server-side. NOTE: the datetime-local field is also timezone-ambiguous - server app TZ is Europe/Istanbul while browser is UTC, so a value typed by a UTC user is interpreted 3h earlier by the server.", "selector": "[data-testid=auction-submit]", "priority": "HIGH"},
+      {"component": "Auctions/Show.vue bid panel", "issue": "After a successful bid the previous '#bid-error' text ('En az X ₺ girmelisiniz.') is not cleared from the DOM, and the 'Teklif Ver' button renders two lightning icons (spinner icon left behind). Cosmetic only.", "selector": "#bid-error, [data-testid=bid-submit-btn]", "priority": "LOW"},
+      {"component": "Admin/Auctions/Index.vue approve()", "issue": "Approve posts immediately with NO confirmation dialog (reject/delete use SweetAlert). Inconsistent UX for a state-changing admin action.", "selector": "[data-testid^=auction-approve-]", "priority": "LOW"},
+      {"component": "Seller/Auctions/Index.vue", "issue": "Seller listing breadcrumb says 'Admin / İlanlar' and the table has a redundant 'Satıcı' column (always the logged-in seller) - admin template reused without adaptation.", "selector": ".pf-breadcrumb-link", "priority": "LOW"},
+      {"component": "Auctions/Show.vue (seed data)", "issue": "Cover image of 'Antika Masa Saati ve Vazo Seti' is a beer-tap photo - seed images unrelated to titles.", "selector": "#mainImg", "priority": "LOW"}
+    ],
+    "integration_issues": [
+      {"flow": "Draft visibility (public)", "issue": "CRITICAL data/business leak: a DRAFT auction pending admin approval appears in the PUBLIC browse listing/search (guest, /browse/auctions?q=...) with a 'BİTTİ' badge, and its public detail page /auctions/test-draft-i7Cybz is fully rendered to guests showing status 'Bekliyor' + 'Teklif vermek için giriş yap'. Root cause: Front/BrowseController@auctions builds Auction::query() with NO base status filter (only filters when ?status=active|ended), and General/BidController@show has no draft/rejected guard for non-owners. Homepage (/) correctly excludes drafts. Category counts on browse also include drafts.", "affected_selectors": ["/browse/auctions?q=", "/auctions/{slug}"]},
+      {"flow": "data-testid mismatch (bid form)", "issue": "Requested selectors [data-testid=bid-input] / [data-testid=submit-bid-btn] do not exist; actual ones are [data-testid=bid-amount-input] / [data-testid=bid-submit-btn] (mobile: mobile-bid-input / mobile-bid-submit). Docs/test contract should be updated.", "affected_selectors": ["[data-testid=bid-amount-input]", "[data-testid=bid-submit-btn]"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "FIX (HIGH): auction creation with the default start date - relax/normalize starts_at validation (and resolve the browser-UTC vs app-Europe/Istanbul timezone mismatch for datetime-local inputs).",
+    "FIX (CRITICAL): exclude non-active (draft/rejected/cancelled) auctions from Front/BrowseController@auctions and from category counts; restrict General/BidController@show for draft/rejected auctions to owner+admin (404/403 for others).",
+    "Consider adding a SweetAlert confirm to the admin approve action for consistency.",
+    "Clear #bid-error and reset the submit-button icon after a successful bid.",
+    "Fix seller auctions breadcrumb ('Admin' -> 'Satıcı') and drop the redundant Satıcı column."
+  ],
+  "critical_code_review_comments": [
+    "Front/BrowseController@auctions: base query has no status scope -> unapproved listings are public. Add ->where('status','active') (and starts_at<=now / ends_at>now for the active case) as the default scope.",
+    "Seller/AuctionController@show serves defaults.starts_at with minute precision but validates after_or_equal:now with second precision -> guaranteed failure for the default value.",
+    "General/BidController@show is a public route with no visibility guard on auction status."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "not tested (frontend-only request)", "frontend": "3/4 requested scenarios pass (approval rule DRAFT: PASS with workaround; draft-not-public: FAIL; admin approve->Aktif: PASS; bid valid+invalid: PASS)"},
+  "seed_data_creation": "Created auction 'QA Onay Testi Ilani' (seller@test.com) -> verified Bekliyor -> approved by admin -> Aktif -> DELETED via admin UI (cleanup done). Placed one real bid on antika-masa-saati-ve-vazo-seti-MD1c: current price 17.280 -> 17.520 TL, bid count 6 -> 7 (buyer@test.com). Existing draft test-draft-i7Cybz untouched.",
+  "should_call_test_agent_after_fix": true,
+  "should_main_agent_self_test": false,
+  "test_credentials": "seller@test.com / admin@test.com / buyer@test.com, password 'password' (from /app/memory/test_credentials.md)",
+  "context_for_next_testing_agent": "Verified working: new auction is created as draft ('Bekliyor') with success flash 'İlanın onaya gönderildi...'; admin approve at /admin/auctions turns it 'Aktif' (no confirm dialog); public bid flow works end-to-end (client-side min error 'En az X ₺ girmelisiniz.' for low bids, price/bid-count/feed update and persist after reload). Not retested: owner-bid, closed auction, LiveKit (BLOCKED). Create form workaround: read the default starts_at value and add +15 min before submit; upload via page.set_input_files('input[type=file]', ...). Bid selectors: [data-testid=bid-amount-input], [data-testid=bid-submit-btn], #live-price, #live-bid-count, #bid-error.",
+  "rca_of_the_issue": "1) starts_at: controller sends now() truncated to minutes as the default while validation uses after_or_equal:now (second precision) - by the time the user submits, the value is in the past, so every default submission fails. Timezone mismatch (server Europe/Istanbul vs browser UTC) makes it worse for non-Istanbul users. 2) Draft leak: the new 'always draft' rule moved unapproved listings into the DB with status=draft, but the public browse query and the public auction show route were never scoped to status=active, so pending listings are searchable and viewable by guests."
+}

@@ -41,13 +41,17 @@ class ProfileController extends Controller
         \App\Models\Story::pruneExpired();
         $heroStories = $user->stories()->where('expires_at', '>', now())->orderBy('id')->get();
 
-        $showcase = $user->auctions->map(fn ($a) => [
+        // Public profil vitrini: yalnızca onaydan geçmiş (public) ilanlar — draft/rejected sızmaz
+        $showcase = $user->auctions()->public()->latest()->get()->map(fn ($a) => [
             'url' => route('auctions.show', $a),
             'cover' => $a->coverUrl(),
             'price_fmt' => number_format($a->current_price ?? $a->starting_price, 0, ',', '.') . ' ₺',
             'title' => $a->title,
             'bid_count' => $a->bids()->count(),
             'view_count' => $a->view_count ?? 0,
+            'is_active' => $a->isActive(),
+            'is_planned' => $a->isPlanned(),
+            'is_live' => (bool) $a->is_live,
         ])->values();
 
         $reviews = null;

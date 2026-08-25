@@ -4496,6 +4496,7 @@ body.swal2-shown {
     position: absolute;
     top: 9px;
     left: 9px;
+    z-index: 3;
     display: flex;
     align-items: center;
     gap: 5px;
@@ -4527,6 +4528,7 @@ body.swal2-shown {
     position: absolute;
     top: 9px;
     left: 9px;
+    z-index: 3;
     background: rgba(248, 113, 113, .12);
     border: 1px solid rgba(248, 113, 113, .25);
     color: #f87171;
@@ -4536,6 +4538,30 @@ body.swal2-shown {
     border-radius: 20px;
     letter-spacing: .3px;
     backdrop-filter: blur(6px);
+}
+
+.idx-active-badge,
+.idx-planned-badge {
+    position: absolute;
+    top: 9px;
+    left: 9px;
+    z-index: 3;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 3px 9px;
+    border-radius: 20px;
+    letter-spacing: .3px;
+    backdrop-filter: blur(6px);
+}
+.idx-active-badge {
+    background: rgba(21, 94, 239, .15);
+    border: 1px solid rgba(21, 94, 239, .30);
+    color: #4f83ff;
+}
+.idx-planned-badge {
+    background: rgba(245, 166, 35, .15);
+    border: 1px solid rgba(245, 166, 35, .30);
+    color: #f5a623;
 }
 
 .idx-price-overlay {

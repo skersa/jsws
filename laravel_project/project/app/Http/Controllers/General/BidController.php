@@ -10,46 +10,79 @@ use App\Models\Bid;
 use App\Services\OrderService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class BidController extends Controller
 {
     public function store(Request $request, Auction $auction)
     {
+        // Erken (hızlı UX) kontrolleri — authoritative DEĞİL; asıl kontrol kilit içinde tekrarlanır
         if (! $auction->isActive()) {
             return response()->json(['message' => 'Bu müzayede aktif değil.'], 422);
         }
-
         if ($auction->user_id === auth()->id()) {
             return response()->json(['message' => 'Kendi ilanınıza teklif veremezsiniz.'], 422);
         }
 
-        $minAmount = (float) $auction->current_price + (float) $auction->min_bid_increment;
-
+        // Erken format doğrulaması (miktar sayısal mı) — min kontrolü kilit içinde yapılır
         try {
-            $request->validate([
-                'amount' => "required|numeric|min:{$minAmount}",
-            ]);
+            $request->validate(['amount' => 'required|numeric']);
         } catch (ValidationException $e) {
-            return response()->json([
-                'message' => $e->errors()['amount'][0] ?? 'Geçersiz teklif.',
-            ], 422);
+            return response()->json(['message' => $e->errors()['amount'][0] ?? 'Geçersiz teklif.'], 422);
         }
 
-        $bid = Bid::create([
-            'auction_id' => $auction->id,
-            'user_id'    => auth()->id(),
-            'amount'     => $request->amount,
-            'ip_address' => $request->ip(),
-        ]);
+        $amount = (float) $request->amount;
+        $userId = (int) auth()->id();
+        $ip     = $request->ip();
 
-        $auction->update(['current_price' => $request->amount]);
+        try {
+            // Aynı ilana eşzamanlı teklifleri serialize et: yalnızca bu auction satırını kilitle.
+            // Farklı ilanlar birbirini kilitlemez (satır bazlı lock).
+            $bid = DB::transaction(function () use ($auction, $amount, $userId, $ip) {
+                $locked = Auction::whereKey($auction->id)->lockForUpdate()->firstOrFail();
 
+                // Kilit alındıktan SONRA authoritative kontroller (source of truth)
+                if (! $locked->isActive()) {
+                    abort(422, 'Bu müzayede aktif değil.');
+                }
+                if ((int) $locked->user_id === $userId) {
+                    abort(422, 'Kendi ilanınıza teklif veremezsiniz.');
+                }
+
+                // Minimum geçerli teklif kilit içinde YENİDEN hesaplanır
+                $minAmount = (float) $locked->current_price + (float) $locked->min_bid_increment;
+                if ($amount < $minAmount) {
+                    abort(422, 'Teklifiniz en az ' . number_format($minAmount, 0, ',', '.') . ' ₺ olmalı.');
+                }
+
+                $bid = Bid::create([
+                    'auction_id' => $locked->id,
+                    'user_id'    => $userId,
+                    'amount'     => $amount,
+                    'ip_address' => $ip,
+                ]);
+
+                $locked->update(['current_price' => $amount]);
+
+                return $bid;
+            });
+        } catch (HttpException $e) {
+            // abort() ile atılan iş kuralı hataları → JSON
+            return response()->json(['message' => $e->getMessage() ?: 'Teklif reddedildi.'], $e->getStatusCode() ?: 422);
+        } catch (\Throwable $e) {
+            // Deadlock / lock timeout / DB hatası → veri bütünlüğü korunur (rollback), kullanıcıya nazik hata
+            report($e);
+            return response()->json(['message' => 'Teklif şu an işlenemedi, lütfen tekrar deneyin.'], 409);
+        }
+
+        // Broadcast/event YALNIZCA başarılı commit sonrası (kilit ve transaction dışında)
         broadcast(new BidPlaced($bid))->toOthers();
 
         return response()->json([
             'bid_id'        => $bid->id,
-            'bidder_id'     => (int) auth()->id(),
+            'bidder_id'     => $userId,
             'bidder_name'   => auth()->user()->name,
             'amount'        => (float) $bid->amount,
             'display_price' => number_format($bid->amount, 0, ',', '.') . ' ₺',
@@ -59,6 +92,12 @@ class BidController extends Controller
 
     public function show(Auction $auction)
     {
+        // Onaylanmamış (draft/rejected) ilanlar herkese açık değil — yalnızca sahibi veya admin görebilir
+        if (in_array($auction->status, ['draft', 'rejected'], true)) {
+            $u = auth()->user();
+            abort_unless($u && ((int) $u->id === (int) $auction->user_id || $u->hasRole('admin')), 404);
+        }
+
         $auction->increment('view_count');
         $auction->load(['images', 'cover', 'bids.user', 'category', 'user']);
 
@@ -74,6 +113,11 @@ class BidController extends Controller
             'sold' => ['Satıldı', 'seller'], 'cancelled' => ['İptal', 'warning'],
         ];
         [$statusLabel, $statusType] = $statusMap[$auction->status] ?? ['—', 'info'];
+
+        // Onaylı ama başlamadıysa kullanıcıya "Planlı" göster (DB status'u 'active' kalır — runtime state)
+        if ($auction->isPlanned()) {
+            [$statusLabel, $statusType] = ['Planlı', 'warning'];
+        }
 
         $ratingVal = $seller->sellerRating();
         $r = round($ratingVal * 2) / 2;
@@ -92,6 +136,8 @@ class BidController extends Controller
             'status_label' => $statusLabel,
             'status_type' => $statusType,
             'is_active' => $auction->isActive(),
+            'is_planned' => $auction->isPlanned(),
+            'starts_at_ts' => $auction->starts_at?->timestamp,
             'has_finished' => $auction->hasFinished(),
             'is_live' => (bool) $auction->is_live,
             'location' => $auction->location,

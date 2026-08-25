@@ -52,6 +52,10 @@ class AuctionController extends Controller
             'auctions' => [
                 'data' => collect($auctions->items())->map(function ($a) use ($statusMap) {
                     [$slabel, $sclass] = $statusMap[$a->status] ?? ['—', 'pf-badge-dark'];
+                    // Onaylı ama başlamadıysa liste de public detay ile tutarlı olsun: "Planlı"
+                    if ($a->isPlanned()) {
+                        [$slabel, $sclass] = ['Planlı', 'pf-badge-warning'];
+                    }
 
                     return [
                         'id'             => $a->id,
@@ -121,17 +125,25 @@ class AuctionController extends Controller
             'min_bid_increment' => 'required|numeric|min:1',
             'condition' => 'required|in:new,used,refurbished',
             'location' => 'nullable|string|max:100',
-            'starts_at' => 'required|date|after_or_equal:now',
+            'starts_at' => ['required', 'date', 'after_or_equal:' . now()->subMinutes(5)->toDateTimeString()],
             'ends_at' => 'required|date|after:starts_at',
             'images' => 'required|array|min:1|max:10',
             'images.*' => 'image|max:4096',
         ]);
 
         DB::transaction(function () use ($data, $request) {
+            // "Şimdi" seçildiğinde form/gönderim gecikmesi tarihi birkaç saniye geçmiş gösterebilir → şimdiye sabitle
+            // (5 dk toleransla gerçek geçmiş tarihler zaten reddedilir). TZ: Europe/Istanbul.
+            $startsAt = \Carbon\Carbon::parse($data['starts_at']);
+            if ($startsAt->isPast()) {
+                $startsAt = now();
+            }
+            $data['starts_at'] = $startsAt;
+
             $auction = Auction::create(array_merge($data, [
                 'user_id' => auth()->id(),
                 'current_price' => $data['starting_price'],
-                'status' => now()->lt($data['starts_at']) ? 'draft' : 'active',
+                'status' => 'draft',
             ]));
 
             foreach ($request->file('images') as $i => $file) {
@@ -146,7 +158,7 @@ class AuctionController extends Controller
         });
 
         return redirect()->route('seller.auctions.index', auth()->user())
-            ->with('success', 'İlanın yayına alındı! 🎉');
+            ->with('success', 'İlanın onaya gönderildi. Admin onayından sonra yayınlanacak. ✅');
     }
 
     public function show(Auction $auction)
@@ -204,7 +216,7 @@ class AuctionController extends Controller
                 'uses_promo_video' => $auction->usesPromoVideo(),
                 'is_direct_video'  => $auction->isDirectVideoFile(),
                 'embed_video_url'  => $auction->usesPromoVideo() && ! $auction->isDirectVideoFile() ? $auction->embedVideoUrl() : null,
-                'can_broadcast'    => in_array($auction->status, ['active', 'draft'], true),
+                'can_broadcast'    => $auction->canBroadcast(),
                 'edit_url'         => route('seller.auctions.edit', $auction),
                 'destroy_url'      => route('seller.auctions.destroy', $auction),
                 'index_url'        => route('seller.auctions.index'),
@@ -320,10 +332,14 @@ class AuctionController extends Controller
         $auction->update(['status' => 'cancelled']);
         $auction->delete();
 
-        if (request()->wantsJson() || request()->ajax()) {
+        // Inertia istekleri de X-Requested-With: XMLHttpRequest gönderir; JSON dalına DÜŞMEMELİ.
+        // Yalnızca gerçek (Inertia olmayan) API/ajax isteklerinde JSON döndür.
+        if (! request()->header('X-Inertia') && (request()->wantsJson() || request()->ajax())) {
             return response()->json(['message' => 'İlan kaldırıldı.']);
         }
 
-        return back()->with('success', 'İlan kaldırıldı.');
+        // Soft-delete sonrası geldiği sayfaya (silinen ilanın detayına) dönersek 404 olur.
+        // Her zaman ilan listesine yönlendir.
+        return redirect()->route('seller.auctions.index')->with('success', 'İlan kaldırıldı.');
     }
 }

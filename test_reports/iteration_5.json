@@ -1,0 +1,37 @@
+{
+  "summary": "Frontend-only verification of the new auction STATE MACHINE (PLANLI/AKTİF/CANLI/BİTTİ), badge distinction and dynamic per-auction countdown on artirdim.com. ALL 7 requested scenarios PASS. (1) PLANLI detail /auctions/planned-HfQfot as guest: top badge 'Planlı', no CANLI pill (.live-pill exists in DOM but hidden), [data-testid=auction-planned-box] shows 'Planlı — henüz başlamadı', 'Başlangıç: 27.08.2026 03:36', 'Başlamasına: 1 gün 23 saat' plus explainer; zero bid inputs / quick-bid buttons; KALAN stat = '8 gün 23 saat' (human-readable, not MM:SS). (2) Buyer logged in on the planned auction still sees only the planned box — no bid input, no 'Teklif Ver' button (0 matches). (3) ACTIVE /auctions/antika-masa-saati-ve-vazo-seti-MD1c: badge 'Aktif', no CANLI, KALAN '5 gün 23 saat'; MutationObserver probe on #live-timer recorded 6 text mutations in 6s => timer ticks every second and is seeded from per-auction data-remaining-secs=517416 (not hardcoded). As buyer the bid form + 3 quick-bid chips render and a valid bid of 17.760 ₺ succeeded: price 17.520 → 17.760 ₺, bid count 7 → 8, no error elements. (4) ENDED /auctions/ended-GkyLZi: badge 'Bitti', KALAN 'Bitti', bid area 'Bu müzayede sona erdi.', no bid form/quick-bid. (5) Badges on cards: home + /browse/auctions show AKTİF (blue rgb(79,131,255)), PLANLI (amber rgb(245,166,35)), BİTTİ (red rgb(248,113,113)) and .idx-live-badge count = 0 everywhere (no false CANLI for active-not-live). (6) Countdown per-auction: 12 of 12 card values distinct and Turkish human-readable ('1 gün 9 saat', '4 gün 3 saat', ...). (7) Regression: mobile 420x850 chip [data-testid=mobile-quick-1] shows '18.240 ₺', clicking fills [data-testid=mobile-bid-input]=18240 while focus stays on the button (no input focus steal); draft /auctions/test-draft-i7Cybz returns 404 for guest; delete fixture test-delete-DXPtMg / -DXPtMg2 no longer exists (404, not in seller list) so that check is SKIPPED as allowed.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Seller panel /seller/auctions list", "issue": "PLANLI TEST İlan is shown with DURUM badge 'Aktif' (green) and the stat card counts it under 'AKTİF (2)'. The seller list uses the raw DB status instead of the new state machine (isPlanned), so it contradicts the public detail page which correctly says 'Planlı'.", "selector": "/seller/auctions table DURUM column", "priority": "MEDIUM"},
+      {"component": "Auctions/Show.vue bid button", "issue": "After a successful bid the submit button label renders a duplicated lightning icon ('⚡ ⚡ Teklif Ver') — icon is re-injected into innerHTML on success.", "selector": "[data-testid=bid-submit-btn]", "priority": "LOW"},
+      {"component": "AuctionCard (planned auction)", "issue": "Planned card shows 'KALAN 8 gün 23 saat' (ends_at based) even though bidding has not started; a 'Başlıyor: X gün Y saat' label would match the detail page semantics.", "selector": ".idx-planned-badge card .idx-timer-val", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Homepage /", "issues": ["Section titled 'Aktif Artırmalar' also lists the PLANLI and BİTTİ (SONA ERMIS) auctions — heading/filter mismatch."]},
+      {"screen": "Auction detail, mobile 420x850 sticky bar", "issues": ["#live-timer-mobile is rendered in red/urgent color even with 5 gün 23 saat remaining; critical color should only apply near the end (<30 min)."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "MEDIUM: make /seller/auctions (and its status counters) use the state machine — show 'Planlı' for approved-but-not-started auctions instead of 'Aktif'.",
+    "LOW: fix duplicated ⚡ icon injected into [data-testid=bid-submit-btn] after a successful bid.",
+    "LOW: on cards for planned auctions, show start countdown ('Başlıyor: X gün Y saat') instead of remaining-time; and exclude planned/ended items from the homepage 'Aktif Artırmalar' section.",
+    "LOW: don't apply timer-critical (red) styling to #live-timer-mobile when days remain.",
+    "NOTE: delete-regression fixture (test-delete-DXPtMg*) no longer exists; recreate it if the delete flow needs retesting."
+  ],
+  "critical_code_review_comments": [
+    "resources/js/useClock.js exposes a single shared 1s interval and day-aware formatCountdown — cards/detail values are computed from each auction's ends_at/starts_at, confirmed dynamic (no hardcoded strings).",
+    "public/assets/js/custom/auction-show.js keeps its own decrementing counter seeded from server data-remaining-secs; verified ticking via MutationObserver. Note it does not resync with wall-clock/server time, so a backgrounded/throttled tab will drift — consider recomputing from ends_at timestamp each tick.",
+    "AuctionCard badge order (is_live → is_active → is_planned → BİTTİ) is correct and prevents 'CANLI' on active-but-not-broadcasting auctions."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "not tested (frontend-only request)", "frontend": "100% - 7/7 requested scenarios pass; 3 minor/cosmetic issues found"},
+  "seed_data_creation": "None created. One real bid placed as buyer@test.com on antika-masa-saati-ve-vazo-seti-MD1c (17.760 ₺) as part of the active-state bid test.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "buyer@test.com / seller@test.com, password 'password' (from /app/memory/test_credentials.md)",
+  "context_for_next_testing_agent": "State machine UI verified end to end. Fixtures: PLANLI=planned-HfQfot, ACTIVE=antika-masa-saati-ve-vazo-seti-MD1c (price now 17.760 ₺, 8 bids), ENDED=ended-GkyLZi, DRAFT=test-draft-i7Cybz (guest 404). Delete fixture is GONE. Detail-page timer dynamism cannot be asserted by text diff at day granularity — use a MutationObserver on #live-timer (6 ticks/6s) as done here. Playwright page.clock.fast_forward had no effect on this timer (own counter), don't rely on it. Remaining open items are the seller-panel 'Aktif' vs 'Planlı' mismatch and cosmetic issues listed above.",
+  "rca_of_the_issue": "Seller-panel status mismatch: the seller listing renders auction.status from DB ('active') rather than the derived state (isActive() now also requires starts_at<=now), so an approved future-start auction displays as 'Aktif' there while the public pages correctly derive 'Planlı'."
+}

@@ -78,11 +78,26 @@ let chatInterval = null;
 let remainingSecs = REMAINING_SECS;
 let timerInt = null;
 function _startTimer() {
+    // KRİTİK: Inertia SPA navigasyonunda modül seviyesindeki `remainingSecs` stale kalır
+    // (script yeniden yüklenmez). Her başlatmada güncel ilanın değerini, Vue'nun reaktif
+    // güncellediği config root'tan yeniden oku → her ilan kendi doğru geri sayımını gösterir.
+    const cfg = document.getElementById('auctionNewConfigRoot');
+    const domSecs = cfg ? parseInt(cfg.dataset.remainingSecs, 10) : NaN;
+    if (Number.isFinite(domSecs)) remainingSecs = domSecs;
+    const fmtRemaining = (s) => {
+        if (s <= 0) return 'Bitti';
+        const d = Math.floor(s / 86400);
+        const h = Math.floor((s % 86400) / 3600);
+        const m = Math.floor((s % 3600) / 60);
+        const sec = s % 60;
+        if (d > 0) return d + ' gün ' + h + ' saat';
+        if (h > 0) return h + ' saat ' + m + ' dk';
+        if (m > 0) return m + ' dk ' + sec + ' sn';
+        return sec + ' sn';
+    };
     const tick = () => {
         if (remainingSecs > 0) remainingSecs--;
-        const m   = Math.floor(remainingSecs / 60);
-        const sec = remainingSecs % 60;
-        const txt = String(m).padStart(2,'0') + ':' + String(sec).padStart(2,'0');
+        const txt = fmtRemaining(remainingSecs);
         ['live-timer','live-timer-mobile'].forEach(id => {
             const el = document.getElementById(id);
             if (!el) return;
@@ -382,7 +397,7 @@ async function _doSubmit(input, btn, btnTxt, errEl) {
     }
 
     if (btn) btn.disabled = false;
-    if (btnTxt) btnTxt.innerHTML = '<i class="bi bi-lightning-charge-fill"></i> Teklif Ver';
+    if (btnTxt) btnTxt.textContent = 'Teklif Ver';
 }
 
 /* ─── Teklif Feed ─── */
@@ -431,6 +446,7 @@ function updateStats(data) {
     const badgeEl = document.getElementById('bid-count-badge');
     if (badgeEl) badgeEl.textContent = data.total_bids + ' teklif';
     currentMin = parseFloat(data.amount) + MIN_INCREMENT;
+    if (typeof window.__onLiveMin === 'function') window.__onLiveMin(currentMin);
     ['bid-input','bid-input-mobile'].forEach(id => {
         const el = document.getElementById(id);
         if (el) { el.min = currentMin; el.placeholder = `Min: ${currentMin.toLocaleString('tr-TR')} ₺`; }
