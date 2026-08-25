@@ -1,0 +1,65 @@
+{
+  "summary": "Broad end-to-end audit of artirdim.com (Laravel 12 + Inertia + Vue 3) as guest, buyer, seller and admin. Built a reusable pytest HTTP suite (53 tests, 51 pass) covering all public pages, the auction state matrix (DRAFT/PLANNED/ACTIVE/ENDED), bid rules, broadcast access rules, seller create/edit/delete with real image upload, admin approve/reject, admin CRUD, support, follow, profile, notifications, plus a storage-image 404 inventory. Playwright sweeps for guest, buyer (bid + mobile sticky bar + stories), seller (dashboard/list/broadcast/story upload) and admin (all 9 panel pages + approve action). Core journeys WORK. 1 HIGH bug found: story viewer is completely broken for GUESTS (uncaught 'openStoryViewer is not defined'). Remaining findings are MEDIUM/LOW gaps listed below.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /live-search", "issue": "Auction search is commented out in General/SearchController (only User::search). Header search returns [] for any auction term ('antika', 'vazo'). Also user search appears to match only `name`, not `username` ('seller' -> [], 'sat' -> hit)."},
+      {"endpoint": "GET /storage/auctions/a{2,3,4,5,6,8}.jpg", "issue": "6 seeded auction images return 404 on every public page (home/browse/profile/detail). Placeholder fallback renders, but console shows 6x404 and most cards have no photo."},
+      {"endpoint": "watchlist / favorites", "issue": "No route exists to add/remove a favorite (no POST /watchlist|/favorites|/auctions/{slug}/favorite in routes/web.php, and no favourite button in any Vue page). /favorites and dashboard 'Favorilerim' can only ever display seeded rows — the feature is read-only/dead."},
+      {"endpoint": "GET /admin/auctions vs GET /seller/auctions", "issue": "Status labelling is inconsistent: the PLANNED fixture (status='active', future starts_at) is shown as 'Planlı' in the seller list but as 'Aktif' in the admin moderation list. Admin uses the raw DB status while seller/public compute 'planned'."},
+      {"endpoint": "POST /auctions/{slug}/bid", "issue": "Successful bid returns no user-visible success feedback (price updates, but no toast/flash). Invalid bid does show 'En az X ₺ girmelisiniz.' correctly."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "AppLayout.vue:422 <StoryViewer v-if=\"user\" /> + StoryBar / Profile/Show.vue:61", "issue": "HIGH: Stories are completely broken for guests. StoryViewer is only mounted when authenticated, so window.openStoryViewer is undefined; clicking a home story ring or the profile avatar ring throws an uncaught 'openStoryViewer is not defined' and nothing happens. Verified: guest typeof window.openStoryViewer === 'undefined'; authenticated === 'function' (works perfectly, correct per-user scoping, no leak).", "selector": "[data-testid^=\"story-user-\"], [data-testid=\"profile-avatar-story\"]", "priority": "HIGH"},
+      {"component": "Seller/Auctions/Index.vue breadcrumb", "issue": "Seller 'İlan Yönetimi' page breadcrumb reads 'Admin / İlanlar' for a seller user — wrong label/route for the seller panel.", "selector": "breadcrumb link 'Admin'", "priority": "MEDIUM"},
+      {"component": "Auctions/Show.vue bid buttons", "issue": "Bid submit uses inline `onclick=\"submitBid()\"` / `submitBidMobile()` global functions instead of Vue @click handlers — fragile under Inertia client-side navigation and unusual for a Vue 3 SPA.", "selector": "[data-testid=\"bid-submit-btn\"]", "priority": "LOW"},
+      {"component": "Admin/Auctions/Index.vue action icons", "issue": "İncele / Düzenle rows have no data-testid (only title attr); approve/reject/delete do (auction-approve-{id} etc). Approve fires immediately with no confirmation dialog — an accidental click publishes an auction irreversibly.", "selector": "[data-testid=\"auction-approve-17\"]", "priority": "LOW"}
+    ],
+    "integration_issues": [
+      {"flow": "Guest story viewing (home story bar + public profile avatar)", "issue": "Click is a no-op with an uncaught JS ReferenceError; guests see story rings that do nothing.", "affected_selectors": ["[data-testid^=\"story-user-\"]", "[data-testid=\"profile-avatar-story\"]"]},
+      {"flow": "Buyer favorites", "issue": "No UI/endpoint to add an auction to the watchlist, so the Favoriler page/dashboard tile cannot be populated by a real user.", "affected_selectors": ["/favorites"]},
+      {"flow": "Header search -> auction", "issue": "Typing an auction title yields zero results (auction search disabled server-side); the dropdown still renders, giving the impression of a broken search.", "affected_selectors": ["header search input"]}
+    ],
+    "design_issues": [
+      {"screen": "Home / Browse / Auction detail", "issues": ["6 auction covers show the 'Görsel bulunamadı' placeholder because the seeded files 404 — most of the grid looks empty/unfinished."]},
+      {"screen": "Public profile /u/emel.kesero.lu4542", "issues": ["Both showcase cards have the identical title 'Bordo Altın Detaylı Porselen Vazo' (duplicate seed data), which looks like a rendering bug to a user."]},
+      {"screen": "Auction detail (PLANLI)", "issues": ["Sidebar 'KALAN' (time-to-end) is shown next to 'Başlamasına' (time-to-start) — two conflicting countdowns. Carried over from iteration 7, still present."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/conftest.py",
+    "/app/backend/tests/backend_test.py",
+    "/app/backend/tests/test_flows.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "HIGH: mount StoryViewer for guests too (remove the `v-if=\"user\"` gate in AppLayout.vue:422, or hide story rings for guests). Prefer replacing the inline `onclick=\"openStoryViewer(...)\"` in Profile/Show.vue with a Vue @click.",
+    "Re-seed / restore the 6 missing files /storage/auctions/a2,a3,a4,a5,a6,a8.jpg (6x 404 on every public page).",
+    "Enable auction results in General/SearchController::search (currently commented out) and make user search also match `username`.",
+    "Implement a favorite/watchlist toggle (route + button on AuctionCard/auction detail) or hide the Favoriler UI.",
+    "Unify status labelling: make Admin/AuctionController use the same planned/active derivation as the seller/public layer (PLANLI shows as 'Aktif' in admin).",
+    "Show a success toast after a successful bid.",
+    "Fix the seller auctions breadcrumb ('Admin / İlanlar' -> 'Satıcı / İlanlarım').",
+    "Add a confirm step to the admin approve action and data-testid to the İncele/Düzenle icons."
+  ],
+  "critical_code_review_comments": [
+    "AppLayout.vue:422 `<StoryViewer v-if=\"user\" />` is the root cause of the guest story failure — any globally-exposed API (window.openStoryViewer) must be registered unconditionally, or its callers must be gated identically.",
+    "Auctions/Show.vue and Profile/Show.vue use string `onclick=\"...\"` attributes calling window globals inside an Inertia SPA. This bypasses Vue's event system, silently fails when the owning component is not mounted, and cannot be unit tested. Convert to @click handlers with props/emit.",
+    "Seller/AuctionController::update() validates `ends_at => after:starts_at` but `starts_at` is neither in the edit payload nor in the rules; it currently passes only by Laravel's date-string fallback. Make the intent explicit (compare against $auction->starts_at) to avoid a future silent break.",
+    "Auction 'planned' state is derived from status='active' + future starts_at in three different places (public, seller, admin) and the admin copy is out of sync. Extract a single accessor/scope (e.g. Auction::statusLabel()) and reuse it."
+  ],
+  "updated_files": [
+    "/app/backend/tests/conftest.py",
+    "/app/backend/tests/backend_test.py",
+    "/app/backend/tests/test_flows.py"
+  ],
+  "success_rate": {"backend": "96% (51/53 pytest; the 2 failures are the image-404 and disabled-auction-search gaps)", "frontend": "~90% (all pages load, all role journeys work; 1 HIGH guest-story bug + 3 UI gaps)"},
+  "seed_data_creation": "All test data cleaned up: TEST_QA auction (created with real image upload, then deleted), TEST_QA support ticket, TEST_QA category, 2 temp drafts for approve/reject — all force-deleted. Fixtures restored: test-draft-i7Cybz status reset to 'draft' and title reset to 'TEST DRAFT ILAN' (the UI approve test had flipped it to active), and the test story uploaded as seller (id 14) was removed. NOT reversible: buyer bids raised /auctions/nav-3h-DUp1C current_price 2.000 -> 4.000 ₺ and antika-masa-saati current_price to 18.000 ₺.",
+  "should_call_test_agent_after_fix": true,
+  "should_main_agent_self_test": false,
+  "test_credentials": "admin@test.com / seller@test.com / buyer@test.com, all password 'password' — all three log in successfully via [data-testid=login-*] and redirect to the correct dashboard.",
+  "context_for_next_testing_agent": "Reusable suite: /app/backend/tests/conftest.py exposes make_session(email), post() (handles Laravel CSRF via the XSRF-TOKEN cookie + Referer/Origin headers — sending the encrypted cookie as _token gives 419), and page_props(session, url) which parses Inertia props out of the `data-page=\"app\"` script tag. Run with `cd /app/backend && python -m pytest tests/ -q` (pytest.ini forces -n 2 --dist loadscope). VERIFIED WORKING: guest pages (all 200), draft 404 for guest + absent from listings, browse filters/pagination, live-state JSON, bid auth guard, buyer pages, valid bid raises price (3.500->4.000 in UI), low bid shows 'En az X ₺ girmelisiniz.', bid on PLANNED/ENDED rejected (422/403), role guards (buyer/seller -> 403 on admin), seller pages incl. create with multipart image upload (becomes 'Bekliyor', uploaded cover resolves 200) and delete (redirects to list, no 404), broadcast rules (draft 403, planned 403, active 200), admin all 9 panel pages, admin approve/reject via API and via the UI icon [data-testid=auction-approve-{id}], admin categories CRUD, support ticket buyer->admin visibility, follow toggle, profile update, notifications read-all, story upload + preview, story navigation for AUTHENTICATED users (profile scope stays on one user for its 3 stories then closes; home scope traverses users — no leak). NOT tested: LiveKit real streaming (no keys — blocked by design), order/payment flow beyond page loads, register submission, contact form submission, messages send. Regression watch: the guest story bug is new/unreported in iterations 1-7.",
+  "rca_of_the_issue": "Guest story failure: resources/js/Layouts/AppLayout.vue line 422 renders `<StoryViewer v-if=\"user\" />`, so for unauthenticated visitors the component never mounts and its onMounted hook (StoryViewer.vue:252) never assigns window.openStoryViewer. StoryBar.vue:11 guards with `typeof window.openStoryViewer === 'function'` so it silently does nothing, while Profile/Show.vue:61 uses a raw inline `onclick=\"openStoryViewer(...)\"` which throws an uncaught ReferenceError. Reproduce: open /u/emel.kesero.lu4542 logged out, click the ringed avatar -> pageerror 'openStoryViewer is not defined', no viewer. Fix: mount StoryViewer unconditionally (guests are already allowed to read stories server-side, /auctions and profile story props are public) or hide story rings when !user."
+}
